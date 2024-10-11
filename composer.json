@@ -1,0 +1,34 @@
+{
+    "name": "acdh-oeaw/arche-diss-cache",
+    "description": "Response and resources cache for ARCHE dissemination services",
+    "keywords": [],
+    "homepage": "https://github.com/acdh-oeaw/arche-diss-cache",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Mateusz Żółtak",
+            "email": "mzoltak@oeaw.ac.at"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "ext-pdo": "*",
+        "guzzlehttp/guzzle": "^7",
+        "acdh-oeaw/arche-lib": "^7",
+        "zozlak/logging": "^1"
+    },
+    "autoload": {
+        "psr-4": {
+            "acdhOeaw\\": "src/acdhOeaw"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "acdhOeaw\\arche\\lib\\dissCache\\": "tests"
+        }
+    },
+    "require-dev": {
+        "phpstan/phpstan": "*",
+        "phpunit/phpunit": "*"
+    }
+}
