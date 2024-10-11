@@ -15,7 +15,8 @@
         "ext-pdo": "*",
         "guzzlehttp/guzzle": "^7",
         "acdh-oeaw/arche-lib": "^7",
-        "zozlak/logging": "^1"
+        "zozlak/logging": "^1",
+        "psr/log": "^3.0"
     },
     "autoload": {
         "psr-4": {
@@ -29,6 +30,7 @@
     },
     "require-dev": {
         "phpstan/phpstan": "*",
-        "phpunit/phpunit": "*"
+        "phpunit/phpunit": "*",
+        "zozlak/logging": "*"
     }
 }

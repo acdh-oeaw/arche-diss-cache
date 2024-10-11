@@ -26,8 +26,10 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use DateTimeImmutable;
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
+use termTemplates\PredicateTemplate as PT;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResource;
@@ -40,11 +42,14 @@ use acdhOeaw\arche\lib\exception\NotFound;
  */
 class RepoWrapperGuzzle implements RepoWrapperInterface {
 
+    private bool $checkModDate;
     private array $guzzleOpts;
     private Client $client;
     private array $repos = [];
 
-    public function __construct(array $guzzleOpts = []) {
+    public function __construct(bool $checkModificationDate = false,
+                                array $guzzleOpts = []) {
+        $this->checkModDate                               = $checkModificationDate;
         $this->guzzleOpts                                 = $guzzleOpts;
         $guzzleOpts['allow_redirects']                    ??= [];
         $guzzleOpts['allow_redirects']['track_redirects'] = true;
@@ -53,15 +58,41 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
     }
 
     public function getResourceById(string $id, ?SearchConfig $config = null): RepoResource {
+        $uri  = $this->resolve($id);
+        $repo = $this->getRepo($uri);
+        return $repo->getResourceById($uri, $config);
+    }
+
+    public function getModificationTimestamp(string $id): int {
+        if (!$this->checkModDate) {
+            return PHP_INT_MAX;
+        }
+        
+        $uri                        = $this->resolve($id);
+        $repo                       = $this->getRepo($uri);
+        $config                     = new SearchConfig();
+        $config->metadataMode       = RepoResource::META_RESOURCE;
+        $modDateProp                = $repo->getSchema()->modificationDate;
+        $config->resourceProperties = [(string) $modDateProp];
+        $res                        = $repo->getResourceById($uri, $config);
+        $modDate                    = $res->getGraph()->getObjectValue(new PT($modDateProp));
+        return (new DateTimeImmutable($modDate))->getTimestamp();
+    }
+
+    private function resolve(string $id): string {
         $resp = $this->client->send(new Request('head', $id));
         if ($resp->getStatusCode() !== 200) {
             throw new NotFound("$id can not be resolved (HTTP status code " . $resp->getStatusCode() . ")");
         }
-        $redirects             = $resp->getHeader('X-Guzzle-Redirect-History');
-        $url                   = end($redirects) ?: $id;
-        $uri                   = preg_replace('`/metadata$`', '', $url);
+        $redirects = $resp->getHeader('X-Guzzle-Redirect-History');
+        $url       = end($redirects) ?: $id;
+        $uri       = preg_replace('`/metadata$`', '', $url);
+        return $uri;
+    }
+
+    private function getRepo(string $uri): Repo {
         $baseUrl               = preg_replace('`[0-9]+$`', '', $uri);
         $this->repos[$baseUrl] ??= new Repo($baseUrl, $this->guzzleOpts);
-        return $this->repos[$baseUrl]->getResourceById($uri, $config);
+        return $this->repos[$baseUrl];
     }
 }

@@ -26,10 +26,10 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use acdhOeaw\arche\lib\RepoInterface;
-use acdhOeaw\arche\lib\RepoResourceInterface;
+use DateTimeImmutable;
 use acdhOeaw\arche\lib\exception\NotFound;
 use acdhOeaw\arche\lib\SearchConfig;
+use Psr\Log\LoggerInterface;
 
 /**
  * Description of Cache
@@ -51,8 +51,10 @@ class ResponseCache {
      * @var callable
      */
     private $missHandler;
-    private int | null $ttl;
+    private int $ttlResource;
+    private int $ttlResponse;
     private SearchConfig $searchCfg;
+    private LoggerInterface | null $log;
 
     /**
      * 
@@ -60,56 +62,100 @@ class ResponseCache {
      *   `function(RepoResourceInterface $res): ResponseCacheItem`
      */
     public function __construct(CacheInterface $cache, callable $missHandler,
-                                int $ttl) {
+                                int $ttlResource, int $ttlResponse,
+                                array $repos, ?SearchConfig $config = null,
+                                ?LoggerInterface $log = null) {
         $this->cache       = $cache;
         $this->missHandler = $missHandler;
-        $this->ttl         = $ttl;
-    }
-
-    public function addRepo(RepoWrapperInterface $repo): self {
-        $this->repos[] = $repo;
-        return $this;
-    }
-
-    public function setSearchConfig(SearchConfig $config): self {
-        $this->searchCfg = $config;
-        return $this;
+        $this->ttlResource = $ttlResource;
+        $this->ttlResponse = $ttlResponse;
+        $this->repos       = $repos;
+        $this->searchCfg   = $config ?? new SearchConfig();
+        $this->log         = $log;
     }
 
     public function getResponse(string | object | array $params, string $resId): ResponseCacheItem {
-        // first check full response cache
-        $key      = $this->hashKey($params);
-        $respItem = $this->cache->get($key);
-        if ($respItem !== false) {
-            return ResponseCacheItem::deserialize($respItem->value);
-        }
-        // then check resource cache
-        $res     = null;
-        $resItem = $this->cache->get($resId);
+        $now     = time();
+        $respKey = $this->hashParams($params);
+        $this->log?->info("Checking cache for resource $resId and parameters hash $respKey");
+
+        // first check if the resource exists in cache
+        // this is needed to check the TTL on the resource level
+        $resItem      = $this->cache->get($resId);
+        $matchingRepo = false;
         if ($resItem !== false) {
+            $resCacheCreation = (new DateTimeImmutable($resItem->created))->getTimestamp();
+            $diffRes          = $now - $resCacheCreation;
+            $this->log?->debug("Resource found in cache (diffRes $diffRes, resTtl $this->ttlResource)");
+            // if resource in cache is too old, check the resource's modification date at source
+            if ($diffRes >= $this->ttlResource) {
+                $resLastMod = PHP_INT_MAX;
+                foreach ($this->repos as $repo) {
+                    try {
+                        $resLastMod = $repo->getModificationTimestamp($resId);
+                        if ($resLastMod < PHP_INT_MAX) {
+                            $matchingRepo = $repo;
+                            break;
+                        }
+                    } catch (NotFound) {
+                        
+                    }
+                }
+                if ($resLastMod > $resCacheCreation) {
+                    // invalidate resource cache
+                    $this->log?->debug("Invalidating resource's cache (resLastMod - resCacheCreation = " . ($resLastMod - $resCacheCreation) . ")");
+                    $resItem = false;
+                } else {
+                    $this->log?->debug("Keeping resource's cache (resLastMod - resCacheCreation = " . ($resLastMod - $resCacheCreation) . ")");
+                }
+            }
+            if ($resItem !== false) {
+                $respItem = $this->cache->get($respKey);
+                $respDiff = $now - (new DateTimeImmutable($respItem->created))->getTimestamp();
+                if ($respItem !== false && $respDiff < $this->ttlResponse) {
+                    $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
+                    return ResponseCacheItem::deserialize($respItem->value);
+                } else {
+                    $this->log?->info("Regenerating response (respDiff $respDiff, respTtl $this->ttlResponse)");
+                }
+            }
+        }
+        // must be separate if as code block above may invalidate $resItem
+        if ($resItem) {
             $res = RepoResourceCacheItem::deserialize($resItem->value);
         } else {
-            // search in repositories as a last resort
-            foreach ($this->repos as $repo) {
+            $this->log?->debug("Fetching the resource");
+            $res   = false;
+            $repos = $matchingRepo ? [$matchingRepo] : $this->repos;
+            foreach ($repos as $repo) {
                 try {
                     $res = $repo->getResourceById($resId, $this->searchCfg);
                 } catch (NotFound) {
                     
                 }
             }
+            if (!$res) {
+                throw new NotFound("Resource $resId can not be found", 400);
+            }
+            $this->log?->debug("Caching the resource");
             $this->cache->set($res->getIds(), RepoResourceCacheItem::serialize($res), null);
         }
-        if ($res === null) {
-            throw new NotFound();
-        }
-        // and generate the response based on a resource
+        // finally generate the response
+        $this->log?->info("Generating the response");
         $value = ($this->missHandler)($res, $params);
-        $this->cache->set([$key], $value->serialize(), null);
+        $this->log?->info("Caching the response");
+        $this->cache->set([$respKey], $value->serialize(), null);
 
         return $value;
     }
 
-    private function hashKey(string | object | array $key): string {
+    /**
+     * Public only to simplify the testing.
+     * 
+     * @param string|object|array $key
+     * @return string
+     */
+    public function hashParams(string | object | array $key): string {
         if (is_object($key)) {
             $key = get_object_vars($key);
         }

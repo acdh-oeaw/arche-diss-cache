@@ -36,4 +36,12 @@ use acdhOeaw\arche\lib\RepoResourceInterface;
 interface RepoWrapperInterface {
 
     public function getResourceById(string $id, ?SearchConfig $config = null): RepoResourceInterface;
+
+    /**
+     * 
+     * @param string $id
+     * @return int return value of PHP_INT_MAX means the resource's modification date
+     *   wasn't checked
+     */
+    public function getModificationTimestamp(string $id): int;
 }

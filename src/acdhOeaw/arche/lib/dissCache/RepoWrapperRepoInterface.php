@@ -38,12 +38,29 @@ use acdhOeaw\arche\lib\RepoResourceInterface;
 class RepoWrapperRepoInterface implements RepoWrapperInterface {
 
     private RepoInterface $repo;
+    private bool $checkModDate;
 
-    public function __construct(RepoInterface $repo) {
-        $this->repo = $repo;
+    public function __construct(RepoInterface $repo,
+                                bool $checkModificationDate = false) {
+        $this->repo         = $repo;
+        $this->checkModDate = $checkModificationDate;
     }
 
     public function getResourceById(string $id, ?SearchConfig $config = null): RepoResourceInterface {
         return $this->repo->getResourceById($id, $config);
+    }
+
+    public function getModificationTimestamp(string $id): int {
+        if (!$this->checkModDate) {
+            return PHP_INT_MAX;
+        }
+
+        $config                     = new SearchConfig();
+        $config->metadataMode       = RepoResource::META_RESOURCE;
+        $modDateProp                = $repo->getSchema()->modificationDate;
+        $config->resourceProperties = [(string) $modDateProp];
+        $res                        = $repo->getResourceById($uri, $config);
+        $modDate                    = $res->getGraph()->getObjectValue(new PT($modDateProp));
+        return (new DateTimeImmutable($modDate))->getTimestamp();
     }
 }
