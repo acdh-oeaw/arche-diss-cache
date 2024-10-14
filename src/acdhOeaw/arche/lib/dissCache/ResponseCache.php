@@ -111,7 +111,7 @@ class ResponseCache {
             }
             if ($resItem !== false) {
                 $respItem = $this->cache->get($respKey);
-                $respDiff = $now - (new DateTimeImmutable($respItem->created))->getTimestamp();
+                $respDiff = $respItem !== false ? $now - (new DateTimeImmutable($respItem->created))->getTimestamp() : 'not in cache';
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
                     $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
                     return ResponseCacheItem::deserialize($respItem->value);
@@ -130,6 +130,7 @@ class ResponseCache {
             foreach ($repos as $repo) {
                 try {
                     $res = $repo->getResourceById($resId, $this->searchCfg);
+                    break;
                 } catch (NotFound) {
                     
                 }
