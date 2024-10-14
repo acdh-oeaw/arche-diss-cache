@@ -30,6 +30,7 @@ use quickRdf\DataFactory;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResourceInterface;
+use acdhOeaw\arche\lib\dissCache\RepoWrapperInterface;
 use zozlak\logging\Log;
 
 /**
@@ -53,6 +54,11 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
 
     private CachePdo $cache;
     private Log $log;
+
+    /**
+     * 
+     * @var callable
+     */
     private $missHandler;
 
     public function setUp(): void {
@@ -97,7 +103,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $repoDouble->method('getResourceById')->willReturn($this->getResourceDouble($resUrl));
 
         $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble]);
-        $paramsHash = $respCache->hashParams($params);
+        $paramsHash = $respCache->hashParams($params, $resUrl);
 
         $this->getFirstResponse($respCache, $params, $resUrl, $refResp);
 
@@ -119,8 +125,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $repoDouble->method('getResourceById')->willReturn($this->getResourceDouble($resUrl));
 
         $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble]);
-        $paramsHash = $respCache->hashParams($params);
-        
+        $paramsHash = $respCache->hashParams($params, $resUrl);
+
         $this->getFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
@@ -142,22 +148,26 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $repoDouble->method('getResourceById')->willReturn($this->getResourceDouble($resUrl));
 
         $respCache  = $this->getResponseCache($this->missHandler, 0, 0, [$repoDouble]);
-        $paramsHash = $respCache->hashParams($params);
-        
+        $paramsHash = $respCache->hashParams($params, $resUrl);
+
         $this->getFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog       = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response\n";
-        $resp         = $respCache->getResponse($params, $resUrl);
+        $refLog = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response\n";
+        $resp   = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
     }
-    
+
+    /**
+     * 
+     * @param array<mixed> $params
+     */
     private function getFirstResponse(ResponseCache $respCache, array $params,
                                       string $resUrl, ResponseCacheItem $refResp): void {
-        $paramsHash = $respCache->hashParams($params);
+        $paramsHash = $respCache->hashParams($params, $resUrl);
         $refLog     = "Checking cache for resource $resUrl and parameters hash $paramsHash\nFetching the resource\nCaching the resource\nGenerating the response\nCaching the response\n";
         $resp       = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
@@ -166,6 +176,10 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
     }
 
+    /**
+     * 
+     * @param null|array<RepoWrapperInterface> $repos
+     */
     private function getResponseCache(callable $missHandler, int $ttlRes = 1,
                                       int $ttlResp = 1, ?array $repos = null,
                                       ?SearchConfig $config = null): ResponseCache {

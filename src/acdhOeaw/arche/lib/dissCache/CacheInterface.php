@@ -34,5 +34,9 @@ interface CacheInterface {
 
     public function get(string $key): CacheItem | false;
 
+    /**
+     * 
+     * @param array<string> $keys
+     */
     public function set(array $keys, string $value, ?int $id): int;
 }

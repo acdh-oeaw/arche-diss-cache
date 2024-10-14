@@ -76,7 +76,7 @@ class CachePdo implements CacheInterface {
             $query->execute([$i, $id]);
         }
 
-        return $id;
+        return (int) $id;
     }
 
     private function maintainDb(): void {

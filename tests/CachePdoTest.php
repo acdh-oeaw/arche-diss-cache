@@ -48,9 +48,9 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
         $refData = 'baz';
         $keys    = ['foo', 'bar'];
         $id      = $cache->set($keys, $refData, null);
-        $this->assertFalse($cache->get($id));
+        $this->assertFalse($cache->get((string) $id));
         $this->assertFalse($cache->get('someKey'));
-        $this->assertFalse($cache->get(-123));
+        $this->assertFalse($cache->get((string) -123));
         foreach ($keys as $key) {
             $data = $cache->get($key);
             $this->assertInstanceOf(CacheItem::class, $data);
@@ -102,6 +102,7 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
         $this->assertEquals($id1, $data1->id);
         $this->assertEquals($id2, $data2->id);
     }
+
     public function testUpdate(): void {
         $cache = new CachePdo('sqlite::memory:', 'testSimple');
 
@@ -111,9 +112,9 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
         $this->assertInstanceOf(CacheItem::class, $data1);
         $this->assertEquals($refData1, $data1->value);
         $this->assertEquals($id1, $data1->id);
-        
+
         sleep(1);
-        
+
         $refData2 = 'data2';
         $id2      = $cache->set([], $refData2, $id1);
         $this->assertEquals($id1, $id2);
@@ -122,6 +123,5 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
         $this->assertEquals($refData2, $data2->value);
         $this->assertEquals($id1, $data2->id);
         $this->assertGreaterThan($data1->created, $data2->created);
-        
     }
 }

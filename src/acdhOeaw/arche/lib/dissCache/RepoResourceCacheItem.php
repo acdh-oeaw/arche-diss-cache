@@ -53,7 +53,7 @@ class RepoResourceCacheItem implements RepoResourceInterface {
             'uri'      => (string) $res->getUri(),
             'metadata' => self::$serializer->serialize($res->getGraph()),
         ];
-        return json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
     static public function deserialize(string $data): self {
@@ -69,9 +69,6 @@ class RepoResourceCacheItem implements RepoResourceInterface {
 
     public function __construct(string $url, ?RepoInterface $repo) {
         $this->metadata = new DatasetNode(DataFactory::namedNode($url));
-        if ($repo !== null) {
-            $this->repo = $repo;
-        }
     }
 
     public function loadMetadata(bool $force = false,

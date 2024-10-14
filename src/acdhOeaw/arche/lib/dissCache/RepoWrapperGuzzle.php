@@ -33,6 +33,7 @@ use termTemplates\PredicateTemplate as PT;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResource;
+use acdhOeaw\arche\lib\RepoResourceInterface;
 use acdhOeaw\arche\lib\exception\NotFound;
 
 /**
@@ -43,10 +44,23 @@ use acdhOeaw\arche\lib\exception\NotFound;
 class RepoWrapperGuzzle implements RepoWrapperInterface {
 
     private bool $checkModDate;
+    /**
+     * 
+     * @var array<string, mixed>
+     */
     private array $guzzleOpts;
     private Client $client;
+    /**
+     * 
+     * @var array<Repo>
+     */
     private array $repos = [];
 
+    /**
+     * 
+     * @param bool $checkModificationDate
+     * @param array<string, mixed> $guzzleOpts
+     */
     public function __construct(bool $checkModificationDate = false,
                                 array $guzzleOpts = []) {
         $this->checkModDate                               = $checkModificationDate;
@@ -57,7 +71,7 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
         $this->client                                     = new Client($guzzleOpts);
     }
 
-    public function getResourceById(string $id, ?SearchConfig $config = null): RepoResource {
+    public function getResourceById(string $id, ?SearchConfig $config = null): RepoResourceInterface {
         $uri  = $this->resolve($id);
         $repo = $this->getRepo($uri);
         return $repo->getResourceById($uri, $config);

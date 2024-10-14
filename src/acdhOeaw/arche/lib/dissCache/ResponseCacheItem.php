@@ -45,9 +45,18 @@ class ResponseCacheItem {
 
     public string $body;
     public int $responseCode;
+
+    /**
+     * 
+     * @var array<string, string|array<string>>
+     */
     public array $headers;
     public bool $hit;
 
+    /**
+     * 
+     * @param array<string, string|array<string>> $headers
+     */
     public function __construct(string $body = '', int $responseCode = 0,
                                 array $headers = [], bool $hit = false) {
         $this->body         = $body;
@@ -57,6 +66,6 @@ class ResponseCacheItem {
     }
 
     public function serialize(): string {
-        return json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        return (string) json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 }

@@ -26,6 +26,8 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use DateTimeImmutable;
+use termTemplates\PredicateTemplate as PT;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\RepoInterface;
 use acdhOeaw\arche\lib\RepoResourceInterface;
@@ -56,10 +58,10 @@ class RepoWrapperRepoInterface implements RepoWrapperInterface {
         }
 
         $config                     = new SearchConfig();
-        $config->metadataMode       = RepoResource::META_RESOURCE;
-        $modDateProp                = $repo->getSchema()->modificationDate;
+        $config->metadataMode       = RepoResourceInterface::META_RESOURCE;
+        $modDateProp                = $this->repo->getSchema()->modificationDate;
         $config->resourceProperties = [(string) $modDateProp];
-        $res                        = $repo->getResourceById($uri, $config);
+        $res                        = $this->repo->getResourceById($id, $config);
         $modDate                    = $res->getGraph()->getObjectValue(new PT($modDateProp));
         return (new DateTimeImmutable($modDate))->getTimestamp();
     }

@@ -60,6 +60,7 @@ class ResponseCache {
      * 
      * @param callable $missHandler with the signature 
      *   `function(RepoResourceInterface $res): ResponseCacheItem`
+     * @param array<RepoWrapperInterface> $repos
      */
     public function __construct(CacheInterface $cache, callable $missHandler,
                                 int $ttlResource, int $ttlResponse,
@@ -74,9 +75,13 @@ class ResponseCache {
         $this->log         = $log;
     }
 
+    /**
+     * 
+     * @param string|object|array<mixed> $params
+     */
     public function getResponse(string | object | array $params, string $resId): ResponseCacheItem {
         $now     = time();
-        $respKey = $this->hashParams($params);
+        $respKey = $this->hashParams($params, $resId);
         $this->log?->info("Checking cache for resource $resId and parameters hash $respKey");
 
         // first check if the resource exists in cache
@@ -153,18 +158,19 @@ class ResponseCache {
     /**
      * Public only to simplify the testing.
      * 
-     * @param string|object|array $key
+     * @param string|object|array<mixed> $key
      * @return string
      */
-    public function hashParams(string | object | array $key): string {
+    public function hashParams(string | object | array $key, string $resId): string {
         if (is_object($key)) {
             $key = get_object_vars($key);
+        } elseif (!is_array($key)) {
+            $key = [$key];
         }
-        if (is_array($key)) {
-            ksort($key);
-            $key = json_encode($key);
-            $key = hash('xxh128', $key);
-        }
+        $key['__RESID__'] = $resId;
+        ksort($key);
+        $key              = (string) json_encode($key);
+        $key              = hash('xxh128', $key);
         return $key;
     }
 }
