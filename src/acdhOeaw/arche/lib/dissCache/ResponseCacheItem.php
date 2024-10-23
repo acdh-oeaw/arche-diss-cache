@@ -68,4 +68,15 @@ class ResponseCacheItem {
     public function serialize(): string {
         return (string) json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
+
+    public function send(): void {
+        http_response_code($this->responseCode);
+        foreach ($this->headers as $header => $values) {
+            $values = is_array($values) ? $values : [$values];
+            foreach ($values as $i) {
+                header("$header: $i");
+            }
+        }
+        echo $this->body;
+    }
 }
