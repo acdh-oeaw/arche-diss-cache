@@ -1,5 +1,5 @@
 dissCacheService:
-  db: sqlite:/tmp/__db__
+  db: "sqlite::memory:"
   log:
     file: /tmp/__log__
     level: debug

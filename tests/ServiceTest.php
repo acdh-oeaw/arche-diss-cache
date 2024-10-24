@@ -38,7 +38,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     public function setUp(): void {
         parent::setUp();
 
-        foreach (array_merge(['/tmp/__db__', '/tmp/__log__'], glob('/tmp/cachePdo*')) as $i) {
+        foreach (array_merge(['/tmp/__log__'], glob('/tmp/cachePdo*')) as $i) {
             unlink($i);
         }
     }
