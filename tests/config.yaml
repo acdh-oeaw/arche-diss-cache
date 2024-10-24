@@ -1,0 +1,15 @@
+dissCacheService:
+  db: sqlite:/tmp/__db__
+  log:
+    file: /tmp/__log__
+    level: debug
+  ttl:
+    resource: 3600
+    response: 31536000
+  repoDb: []
+  allowedNmsp:
+  - https://id.acdh.oeaw.ac.at
+  metadataMode: resource
+  parentProperty: ""
+  resourceProperties: []
+  relativesProperties: []
