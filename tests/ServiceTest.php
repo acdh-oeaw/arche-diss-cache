@@ -47,7 +47,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $clbck = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
-        $service  = new Service(__DIR__ . '/config.yaml', $clbck);
+        $service  = new Service(__DIR__ . '/config.yaml');
+        $service->setCallback($clbck);
         $param    = ['foo', 3];
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $param, false);

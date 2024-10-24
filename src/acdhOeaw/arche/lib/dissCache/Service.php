@@ -68,22 +68,24 @@ class Service {
      */
     private $clbck;
 
-    /**
-     * 
-     * @param string $confFile
-     * @param callable $clbck response cache miss handler with signature
-     *   `fn(acdhOeaw\arche\lib\RepoResourceInterface $res, array $param)`
-     *   where the `$param` will passed from the `serveRequest()` method 
-     *   `$param` parameter.
-     */
-    public function __construct(string $confFile, callable $clbck) {
+    public function __construct(string $confFile) {
         $this->config = json_decode(json_encode(yaml_parse_file($confFile)));
-        $this->clbck  = $clbck;
 
         $logId     = sprintf("%08d", rand(0, 99999999));
         $tmpl      = "{TIMESTAMP}:$logId:{LEVEL}\t{MESSAGE}";
         $logCfg    = $this->config->dissCacheService->log;
         $this->log = new Log($logCfg->file, $logCfg->level, $tmpl);
+    }
+
+    /**
+     * 
+     * @param callable $clbck response cache miss handler with signature
+     *   `fn(acdhOeaw\arche\lib\RepoResourceInterface $res, array $param)`
+     *   where the `$param` will passed from the `serveRequest()` method 
+     *   `$param` parameter.
+     */
+    public function setCallback(callable $clbck): void {
+        $this->clbck = $clbck;
     }
 
     public function getConfig(): object {
