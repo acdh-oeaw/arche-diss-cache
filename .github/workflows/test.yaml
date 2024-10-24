@@ -15,7 +15,10 @@ jobs:
     - name: composer
       run: |
         composer update
-    - name: test
+    - name: phpstan
+      run: |
+        vendor/bin/phpstan analyze -l 6 src
+    - name: phpunit
       run: |
         mkdir -p build/logs
         XDEBUG_MODE=coverage vendor/bin/phpunit --display-deprecations --display-phpunit-deprecations --display-notices --display-warnings
