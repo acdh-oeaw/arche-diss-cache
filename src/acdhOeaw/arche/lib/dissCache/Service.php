@@ -120,7 +120,7 @@ class Service {
                 throw new ServiceException("Requested resource $id not in allowed namespace", 400);
             }
 
-            $cache = new CachePdo($cfg->db);
+            $cache = new CachePdo($cfg->db, $cfg->dbId ?? null);
 
             $repos = [];
             foreach ($cfg->repoDb ?? [] as $i) {
