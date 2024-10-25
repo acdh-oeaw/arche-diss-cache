@@ -140,18 +140,22 @@ class Service {
             $this->log->info("Ended in " . round(microtime(true) - $t0, 3) . " s");
             return $response;
         } catch (\Throwable $e) {
-            $code              = $e->getCode();
-            $ordinaryException = $e instanceof ServiceException || $e instanceof NotFound;
-
-            $logMsg = "$code: " . $e->getMessage() . ($ordinaryException ? '' : "\n" . $e->getFile() . ":" . $e->getLine() . "\n" . $e->getTraceAsString());
-            $this->log->error($logMsg);
-
-            if ($code < 400 || $code >= 500) {
-                $code = 500;
-            }
-            $body    = $ordinaryException ? $e->getMessage() . "\n" : "Internal Server Error\n";
-            $headers = $e instanceof ServiceException ? $e->getHeaders() : [];
-            return new ResponseCacheItem($body, $code, $headers, false);
+            return $this->processException($e);
         }
+    }
+
+    public function processException(\Throwable $e): ResponseCacheItem {
+        $code              = $e->getCode();
+        $ordinaryException = $e instanceof ServiceException || $e instanceof NotFound;
+
+        $logMsg = "$code: " . $e->getMessage() . ($ordinaryException ? '' : "\n" . $e->getFile() . ":" . $e->getLine() . "\n" . $e->getTraceAsString());
+        $this->log->error($logMsg);
+
+        if ($code < 400 || $code >= 500) {
+            $code = 500;
+        }
+        $body    = $ordinaryException ? $e->getMessage() . "\n" : "Internal Server Error\n";
+        $headers = $e instanceof ServiceException ? $e->getHeaders() : [];
+        return new ResponseCacheItem($body, $code, $headers, false);
     }
 }
