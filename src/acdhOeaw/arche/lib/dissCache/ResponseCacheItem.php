@@ -69,7 +69,7 @@ class ResponseCacheItem {
         return (string) json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    public function send(): void {
+    public function send(bool $compress = false): void {
         http_response_code($this->responseCode);
         foreach ($this->headers as $header => $values) {
             $values = is_array($values) ? $values : [$values];
@@ -77,6 +77,11 @@ class ResponseCacheItem {
                 header("$header: $i");
             }
         }
-        echo $this->body;
+        if ($compress && str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip')) {
+            header('Content-Encoding: gzip');
+            echo gzencode($this->body);
+        } else {
+            echo $this->body;
+        }
     }
 }
