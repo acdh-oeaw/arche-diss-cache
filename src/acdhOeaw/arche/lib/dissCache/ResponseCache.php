@@ -143,14 +143,18 @@ class ResponseCache {
             if (!$res) {
                 throw new NotFound("Resource $resId can not be found", 400);
             }
-            $this->log?->debug("Caching the resource");
-            $this->cache->set($res->getIds(), RepoResourceCacheItem::serialize($res), null);
         }
         // finally generate the response
         $this->log?->info("Generating the response");
         $value = ($this->missHandler)($res, $params);
         $this->log?->info("Caching the response");
         $this->cache->set([$respKey], $value->serialize(), null);
+
+        if (!($res instanceof RepoResourceCacheItem)) {
+            // so late to preserve any changes done to the resource metadata by the missHandler
+            $this->log?->debug("Caching the resource");
+            $this->cache->set($res->getIds(), RepoResourceCacheItem::serialize($res), null);
+        }
 
         return $value;
     }

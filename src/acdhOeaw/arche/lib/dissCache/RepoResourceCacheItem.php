@@ -67,7 +67,7 @@ class RepoResourceCacheItem implements RepoResourceInterface {
         return $res;
     }
 
-    /* @phpstan-ignore constructor.unusedParameter */
+    /** @phpstan-ignore constructor.unusedParameter */
     public function __construct(string $url, ?RepoInterface $repo) {
         $this->metadata = new DatasetNode(DataFactory::namedNode($url));
     }
