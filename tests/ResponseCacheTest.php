@@ -109,7 +109,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
 
         unlink(self::$logPath);
         $refLog1 = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = ";
-        $refLog2 = "\nFetching the resource\nGenerating the response\nCaching the response\nCaching the resource\n";
+        $refLog2 = "\nFetching the resource\nGenerating the response\nCaching the response under key a27e77fa3446453c2c449582eb48f427\nCaching the resource\n";
         $resp    = $respCache->getResponse($params, $resUrl);
         $this->assertStringStartsWith($refLog1, file_get_contents(self::$logPath));
         $this->assertStringEndsWith($refLog2, file_get_contents(self::$logPath));
@@ -157,7 +157,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response\n";
+        $refLog = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under key a27e77fa3446453c2c449582eb48f427\n";
         $resp   = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);
@@ -181,6 +181,26 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertInstanceOf(CacheItem::class, $resCacheItem);
     }
 
+    public function testMultipleResourceIds(): void {
+        $respCache = $this->getResponseCache($this->missHandler);
+        $resUrl1   = 'https://arche.acdh.oeaw.ac.at/api/1238';
+        $resUrl2   = 'https://id.acdh.oeaw.ac.at/acdh-schema';
+        $params    = ['foo' => 'bar'];
+
+        $t1    = microtime(true);
+        $resp1 = $respCache->getResponse($params, $resUrl1);
+        $t1    = microtime(true) - $t1;
+        $this->assertEquals(new ResponseCacheItem($resUrl1, 302, $params, false), $resp1);
+
+        $t2    = microtime(true);
+        $resp2 = $respCache->getResponse($params, $resUrl2);
+        $this->assertEquals(new ResponseCacheItem($resUrl1, 302, $params, true), $resp2);
+        $t2    = microtime(true) - $t2;
+
+        // second one should come from cache and be much faster
+        $this->assertGreaterThan($t2 * 10, $t1);
+    }
+
     /**
      * 
      * @param array<mixed> $params
@@ -189,7 +209,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
                                         string $resUrl,
                                         ResponseCacheItem $refResp): void {
         $paramsHash = $respCache->hashParams($params, $resUrl);
-        $refLog     = "Checking cache for resource $resUrl and parameters hash $paramsHash\nFetching the resource\nGenerating the response\nCaching the response\nCaching the resource\n";
+        $refLog    = "Checking cache for resource $resUrl and parameters hash $paramsHash\nFetching the resource\nGenerating the response\nCaching the response under key a27e77fa3446453c2c449582eb48f427\nCaching the resource\n";
         $resp       = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);

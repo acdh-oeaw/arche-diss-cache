@@ -82,6 +82,7 @@ class ResponseCache {
     public function getResponse(string | object | array $params, string $resId): ResponseCacheItem {
         $now     = time();
         $respKey = $this->hashParams($params, $resId);
+        $res     = null;
         $this->log?->info("Checking cache for resource $resId and parameters hash $respKey");
 
         // first check if the resource exists in cache
@@ -115,6 +116,10 @@ class ResponseCache {
                 }
             }
             if ($resItem !== false) {
+                // regenerate the response key using the canonical resource URI
+                $res     = RepoResourceCacheItem::deserialize($resItem->value);
+                $respKey = $this->hashParams($params, (string) $res->getUri());
+
                 $respItem = $this->cache->get($respKey);
                 $respDiff = $respItem !== false ? $now - (new DateTimeImmutable($respItem->created))->getTimestamp() : 'not in cache';
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
@@ -126,9 +131,7 @@ class ResponseCache {
             }
         }
         // must be separate if as code block above may invalidate $resItem
-        if ($resItem) {
-            $res = RepoResourceCacheItem::deserialize($resItem->value);
-        } else {
+        if (!$resItem) {
             $this->log?->debug("Fetching the resource");
             $res   = false;
             $repos = $matchingRepo ? [$matchingRepo] : $this->repos;
@@ -147,7 +150,7 @@ class ResponseCache {
         // finally generate the response
         $this->log?->info("Generating the response");
         $value = ($this->missHandler)($res, $params);
-        $this->log?->info("Caching the response");
+        $this->log?->info("Caching the response under key $respKey");
         $this->cache->set([$respKey], $value->serialize(), null);
 
         if (!($res instanceof RepoResourceCacheItem)) {
