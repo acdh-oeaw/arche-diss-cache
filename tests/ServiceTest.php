@@ -64,4 +64,27 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
             ], false);
         $this->assertEquals($ref, $response);
     }
+
+    public function testCacheError(): void {
+        $clbck = function (RepoResourceInterface $res, array $params): ResponseCacheItem {
+            throw new ServiceException('foo', 456, null, ['custom' => 'header']);
+        };
+        $service = new Service(__DIR__ . '/config.yaml');
+        $service->setCallback($clbck);
+        $respRef = new ResponseCacheItem("foo\n", 456, ['custom' => 'header'], false);
+        $param   = [];
+
+        $t0           = microtime(true);
+        $resp1        = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t1           = microtime(true);
+        $resp2        = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t2           = microtime(true);
+        $this->assertEquals($respRef, $resp1);
+        $respRef->hit = true;
+        $this->assertEquals($respRef, $resp2);
+        // second one should come from cache and be much faster
+        $t2           -= $t1;
+        $t1           -= $t0;
+        $this->assertGreaterThan($t2 * 10, $t1);
+    }
 }

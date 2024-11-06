@@ -55,6 +55,7 @@ class ResponseCache {
     private int $ttlResponse;
     private SearchConfig $searchCfg;
     private LoggerInterface | null $log;
+    private string $lastResponseKey;
 
     /**
      * 
@@ -80,10 +81,10 @@ class ResponseCache {
      * @param string|object|array<mixed> $params
      */
     public function getResponse(string | object | array $params, string $resId): ResponseCacheItem {
-        $now     = time();
-        $respKey = $this->hashParams($params, $resId);
-        $res     = null;
-        $this->log?->info("Checking cache for resource $resId and parameters hash $respKey");
+        $now                   = time();
+        $this->lastResponseKey = $this->hashParams($params, $resId);
+        $res                   = null;
+        $this->log?->info("Checking cache for resource $resId and response key $this->lastResponseKey");
 
         // first check if the resource exists in cache
         // this is needed to check the TTL on the resource level
@@ -117,10 +118,14 @@ class ResponseCache {
             }
             if ($resItem !== false) {
                 // regenerate the response key using the canonical resource URI
-                $res     = RepoResourceCacheItem::deserialize($resItem->value);
-                $respKey = $this->hashParams($params, (string) $res->getUri());
+                $res    = RepoResourceCacheItem::deserialize($resItem->value);
+                $resUri = (string) $res->getUri();
+                if ($resUri !== $resId) {
+                    $this->lastResponseKey = $this->hashParams($params, (string) $resUri);
+                    $this->log?->debug("Updating response key to $this->lastResponseKey");
+                }
 
-                $respItem = $this->cache->get($respKey);
+                $respItem = $this->cache->get($this->lastResponseKey);
                 $respDiff = $respItem !== false ? $now - (new DateTimeImmutable($respItem->created))->getTimestamp() : 'not in cache';
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
                     $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
@@ -146,20 +151,29 @@ class ResponseCache {
             if (!$res) {
                 throw new NotFound("Resource $resId can not be found", 400);
             }
+            $resUri                = (string) $res->getUri();
+            $this->lastResponseKey = $this->hashParams($params, (string) $resUri);
+            $this->log?->debug("Updating response key to $this->lastResponseKey");
         }
         // finally generate the response
         $this->log?->info("Generating the response");
-        $value = ($this->missHandler)($res, $params);
-        $this->log?->info("Caching the response under key $respKey");
-        $this->cache->set([$respKey], $value->serialize(), null);
-
-        if (!($res instanceof RepoResourceCacheItem)) {
-            // so late to preserve any changes done to the resource metadata by the missHandler
-            $this->log?->debug("Caching the resource");
-            $this->cache->set($res->getIds(), RepoResourceCacheItem::serialize($res), null);
+        try {
+            $value = ($this->missHandler)($res, $params);
+            $this->log?->info("Caching the response under a key $this->lastResponseKey");
+            $this->cache->set([$this->lastResponseKey], $value->serialize(), null);
+        } finally {
+            if (!($res instanceof RepoResourceCacheItem)) {
+                // so late to preserve any changes done to the resource metadata by the missHandler
+                $this->log?->debug("Caching the resource");
+                $this->cache->set($res->getIds(), RepoResourceCacheItem::serialize($res), null);
+            }
         }
 
         return $value;
+    }
+
+    public function getLastResponseKey(): string | false {
+        return isset($this->lastResponseKey) ? $this->lastResponseKey : false;
     }
 
     /**

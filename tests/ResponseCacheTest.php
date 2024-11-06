@@ -108,8 +108,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog1 = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = ";
-        $refLog2 = "\nFetching the resource\nGenerating the response\nCaching the response under key a27e77fa3446453c2c449582eb48f427\nCaching the resource\n";
+        $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = ";
+        $refLog2 = "\nFetching the resource\nUpdating response key to a27e77fa3446453c2c449582eb48f427\nGenerating the response\nCaching the response under a key a27e77fa3446453c2c449582eb48f427\nCaching the resource\n";
         $resp    = $respCache->getResponse($params, $resUrl);
         $this->assertStringStartsWith($refLog1, file_get_contents(self::$logPath));
         $this->assertStringEndsWith($refLog2, file_get_contents(self::$logPath));
@@ -132,7 +132,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog1      = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -";
+        $refLog1      = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -";
         $refLog2      = "\nServing response from cache (respDiff 0, respTtl 100)\n";
         $resp         = $respCache->getResponse($params, $resUrl);
         $this->assertStringStartsWith($refLog1, file_get_contents(self::$logPath));
@@ -157,7 +157,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog = "Checking cache for resource $resUrl and parameters hash $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under key a27e77fa3446453c2c449582eb48f427\n";
+        $refLog = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under a key a27e77fa3446453c2c449582eb48f427\n";
         $resp   = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);
@@ -209,7 +209,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
                                         string $resUrl,
                                         ResponseCacheItem $refResp): void {
         $paramsHash = $respCache->hashParams($params, $resUrl);
-        $refLog    = "Checking cache for resource $resUrl and parameters hash $paramsHash\nFetching the resource\nGenerating the response\nCaching the response under key a27e77fa3446453c2c449582eb48f427\nCaching the resource\n";
+        $refLog     = "Checking cache for resource $resUrl and response key $paramsHash\nFetching the resource\nUpdating response key to a27e77fa3446453c2c449582eb48f427\nGenerating the response\nCaching the response under a key a27e77fa3446453c2c449582eb48f427\nCaching the resource\n";
         $resp       = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);

@@ -61,6 +61,7 @@ class Service {
 
     private object $config;
     private Log $log;
+    private CachePdo $cacheDb;
 
     /**
      * 
@@ -120,7 +121,7 @@ class Service {
                 throw new ServiceException("Requested resource $id not in allowed namespace", 400);
             }
 
-            $cache = new CachePdo($cfg->db, $cfg->dbId ?? null);
+            $this->cacheDb ??= new CachePdo($cfg->db, $cfg->dbId ?? null);
 
             $repos = [];
             foreach ($cfg->repoDb ?? [] as $i) {
@@ -134,13 +135,19 @@ class Service {
             $sc->resourceProperties     = $cfg->resourceProperties ?? [];
             $sc->relativesProperties    = $cfg->relativesProperties ?? [];
 
-            $cache = new ResponseCache($cache, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log);
+            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log);
 
             $response = $cache->getResponse($param, $id);
             $this->log->info("Ended in " . round(microtime(true) - $t0, 3) . " s");
             return $response;
         } catch (\Throwable $e) {
-            return $this->processException($e);
+            $response = $this->processException($e);
+            if ($e instanceof ServiceException && ($cache ?? null) instanceof ResponseCache) {
+                $key = $cache->getLastResponseKey();
+                $this->log->info("Caching the error response under a key $key");
+                $this->cacheDb->set([$key], $response->serialize(), null);
+            }
+            return $response;
         }
     }
 
