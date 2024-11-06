@@ -49,7 +49,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         };
         $service  = new Service(__DIR__ . '/config.yaml');
         $service->setCallback($clbck);
-        $param    = ['foo', 3];
+        $param    = ['foo' => 'bar', 'baz' => '3'];
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $param, false);
         $this->assertEquals($ref, $response);
