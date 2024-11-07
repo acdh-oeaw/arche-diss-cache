@@ -36,7 +36,15 @@ interface CacheInterface {
 
     /**
      * 
+     * @return array<string>
+     */
+    public function getKeys(string $key): array;
+
+    /**
+     * 
      * @param array<string> $keys
      */
     public function set(array $keys, string $value, ?int $id): int;
+
+    public function delete(string $keyLike): void;
 }

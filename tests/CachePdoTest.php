@@ -124,4 +124,28 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
         $this->assertEquals($id1, $data2->id);
         $this->assertGreaterThan($data1->created, $data2->created);
     }
+
+    public function testDelete(): void {
+        $cache = new CachePdo('sqlite::memory:', 'testSimple');
+
+        $key1 = 'foo';
+        $key2 = "bar_$key1";
+        $data = 'data';
+        $id1  = $cache->set([$key1], $data, null);
+        $id2  = $cache->set([$key2], $data, null);
+
+        $data1 = $cache->get($key1);
+        $this->assertInstanceOf(CacheItem::class, $data1);
+        $this->assertEquals($data, $data1->value);
+        $this->assertEquals($id1, $data1->id);
+
+        $data2 = $cache->get($key2);
+        $this->assertInstanceOf(CacheItem::class, $data2);
+        $this->assertEquals($data, $data2->value);
+        $this->assertEquals($id2, $data2->id);
+
+        $cache->delete("%$key1");
+        $this->assertFalse($cache->get($key1));
+        $this->assertFalse($cache->get($key2));
+    }
 }

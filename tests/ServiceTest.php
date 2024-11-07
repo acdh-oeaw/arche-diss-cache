@@ -87,4 +87,31 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $t1           -= $t0;
         $this->assertGreaterThan($t2 * 10, $t1);
     }
+
+    public function testClearCache(): void {
+        $param   = [];
+        $refResp = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $param, false);
+        $clbck   = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
+            return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
+        };
+        $service = new Service(__DIR__ . '/config.yaml');
+        $service->setCallback($clbck);
+        $t0      = microtime(true);
+        $resp1   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t1      = microtime(true);
+        $resp2   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t2      = microtime(true);
+        $resp3   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param, true);
+        $t3      = microtime(true);
+
+        $t3           -= $t2;
+        $t2           -= $t1;
+        $t1           -= $t0;
+        $this->assertEquals($refResp, $resp1);
+        $this->assertEquals($refResp, $resp3);
+        $refResp->hit = true;
+        $this->assertEquals($refResp, $resp2);
+        $this->assertGreaterThan($t2 * 10, $t1);
+        $this->assertGreaterThan($t2 * 10, $t3);
+    }
 }

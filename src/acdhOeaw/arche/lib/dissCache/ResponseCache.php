@@ -38,6 +38,8 @@ use Psr\Log\LoggerInterface;
  */
 class ResponseCache {
 
+    const HASH_ALGO = 'xxh128';
+
     private CacheInterface $cache;
 
     /**
@@ -188,10 +190,16 @@ class ResponseCache {
         } elseif (!is_array($key)) {
             $key = [$key];
         }
-        $key['__RESID__'] = $resId;
         ksort($key);
-        $key              = (string) json_encode($key);
-        $key              = hash('xxh128', $key);
+        $key = (string) json_encode($key);
+        $key = hash(self::HASH_ALGO, $key) . "_$resId";
         return $key;
+    }
+
+    public function pruneCacheForResource(string $resId): void {
+        $resKeys = $this->cache->getKeys($resId);
+        foreach ($resKeys as $key) {
+            $this->cache->delete("%$key");
+        }
     }
 }

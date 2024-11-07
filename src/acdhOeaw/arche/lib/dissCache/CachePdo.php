@@ -62,6 +62,16 @@ class CachePdo implements CacheInterface {
         return $query->fetchObject(CacheItem::class);
     }
 
+    /**
+     * 
+     * @return array<string>
+     */
+    public function getKeys(string $key): array {
+        $query = $this->pdo->prepare("SELECT key FROM keys WHERE id = (SELECT id FROM keys WHERE key = ?)");
+        $query->execute([$key]);
+        return $query->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function set(array $keys, string $value, ?int $id): int {
         $query = $this->pdo->prepare("
             INSERT OR REPLACE INTO vals (id, created, value) 
@@ -77,6 +87,20 @@ class CachePdo implements CacheInterface {
         }
 
         return (int) $id;
+    }
+
+    public function delete(string $keyLike): void {
+        $query = $this->pdo->prepare("
+            DELETE FROM vals
+            WHERE id IN (SELECT id FROM keys WHERE key LIKE ?)
+        ");
+        $query->execute([$keyLike]);
+
+        $query = $this->pdo->prepare("
+            DELETE FROM keys
+            WHERE id IN (SELECT id FROM keys WHERE key LIKE ?)
+        ");
+        $query->execute([$keyLike]);
     }
 
     private function maintainDb(): void {
