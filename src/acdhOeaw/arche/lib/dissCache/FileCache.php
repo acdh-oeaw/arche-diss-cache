@@ -76,7 +76,7 @@ class FileCache {
         }
 
         $path = $this->dir . '/' . $filename;
-        file_put_contents('', $path);
+        file_put_contents($path, '');
         chmod($path, 0600);
         return $path;
     }
@@ -88,10 +88,13 @@ class FileCache {
      * 
      * Be aware in case of a local access this method doesn't check the access rights.
      * 
+     * @param string $expectedMime expected mime type. If the resource content is 
+     *   downloaded and the download reports different mime type, an error is thrown. 
+     *   Passing an empty value skips the check.
      * @param array<string, mixed> $guzzleOpts guzzle Client options to be used
      *   if a resource binary is to be downloaded. Allows passing e.g. credentials.
      */
-    public function getRefFilePath(string $resUrl, string $mime = '',
+    public function getRefFilePath(string $resUrl, string $expectedMime = '',
                                    array $guzzleOpts = []): string {
         // direct local access
         foreach ($this->localAccess as $nmsp => $nmspCfg) {
@@ -116,7 +119,7 @@ class FileCache {
         // cache access
         $path = $this->dir . '/' . hash('xxh128', $resUrl) . '/ref';
         if (!file_exists($path)) {
-            $this->fetchResourceBinary($path, $resUrl, $mime, $guzzleOpts);
+            $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts);
         }
         return $path;
     }
@@ -124,13 +127,14 @@ class FileCache {
     /**
      * Fetches original resource
      * 
+     * @param string $expectedMime expected mime type. If the resource content is 
+     *   downloaded and the download reports different mime type, an error is thrown. 
+     *   Passing an empty value skips the check.
      * @param array<string, mixed> $guzzleOpts
      */
     private function fetchResourceBinary(string $path, string $resUrl,
-                                         string $mime, array $guzzleOpts = []): void {
-        if ($mime === '') {
-            return;
-        }
+                                         string $expectedMime,
+                                         array $guzzleOpts = []): void {
         $this->log?->info("Downloading " . $resUrl);
 
         $dir = dirname($path);
@@ -148,8 +152,8 @@ class FileCache {
         }
         // mime mismatch is most probably redirect to metadata
         $realMime = $resp->getHeader('Content-Type')[0] ?? 'lacking content type';
-        if ($mime !== $realMime) {
-            $this->log?->error("Mime mismatch: downloaded $realMime, expected $mime");
+        if (!empty($expectedMime) && $expectedMime !== $realMime) {
+            $this->log?->error("Mime mismatch: downloaded $realMime, expected $expectedMime");
             throw new FileCacheException('The requested file misses binary content', FileCacheException::NO_BINARY);
         }
         $body  = $resp->getBody();
@@ -166,13 +170,13 @@ class FileCache {
 
     /**
      * Assures caches doesn't exceed a given size.
-     * @param int $maxSizeMb maximum cache size in MB
+     * @param float $maxSizeMb maximum cache size in MB
      * @param int $mode which files should be removed first
      *   - `ClearCache::BY_MOD_TIME` - oldest
      *   - `ClearCache::BY_SIZE` - biggest
      * @throws BadMethodCallException
      */
-    public function clean(int $maxSizeMb, int $mode): void {
+    public function clean(float $maxSizeMb, int $mode): void {
         if (!in_array($mode, [self::BY_MOD_TIME, self::BY_SIZE])) {
             throw new BadMethodCallException('unknown mode parameter value');
         }
@@ -194,7 +198,7 @@ class FileCache {
         }
         arsort($byModTime);
         asort($bySize);
-        $this->log?->info("Total cache size $sizeSum");
+        $this->log?->info("Total cache size $sizeSum, limit $maxSizeMb");
 
         // assure cache size limit
         if ($sizeSum > $maxSizeMb) {
@@ -210,7 +214,8 @@ class FileCache {
         // remove empty directories
         $dirIter = new DirectoryIterator($this->dir);
         foreach ($dirIter as $i) {
-            if (!$i->isDot() && count(scandir($i->getPathname()) ?: []) === 2) {
+            if (!$i->isDot() && $i->isDir() && count(scandir($i->getPathname()) ?: [
+]) === 2) {
                 rmdir($i->getPathname());
             }
         }
