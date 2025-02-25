@@ -40,6 +40,7 @@ class ResponseCacheItem {
         $d->responseCode = $data->responseCode;
         $d->headers      = (array) $data->headers;
         $d->hit          = true;
+        $d->file         = $data->file;
         return $d;
     }
 
@@ -52,17 +53,20 @@ class ResponseCacheItem {
      */
     public array $headers;
     public bool $hit;
+    public bool $file;
 
     /**
      * 
      * @param array<string, string|array<string>> $headers
      */
     public function __construct(string $body = '', int $responseCode = 0,
-                                array $headers = [], bool $hit = false) {
+                                array $headers = [], bool $hit = false,
+                                bool $file = false) {
         $this->body         = $body;
         $this->responseCode = $responseCode;
         $this->headers      = $headers;
         $this->hit          = $hit;
+        $this->file         = $file;
     }
 
     public function serialize(): string {
@@ -77,9 +81,11 @@ class ResponseCacheItem {
                 header("$header: $i");
             }
         }
-        if ($compress && str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip')) {
+        if ($compress && str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip') && $this->file) {
             header('Content-Encoding: gzip');
             echo gzencode($this->body);
+        } elseif ($this->file) {
+            readfile($this->body);
         } else {
             echo $this->body;
         }

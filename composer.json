@@ -32,5 +32,8 @@
         "phpstan/phpstan": "*",
         "phpunit/phpunit": "*",
         "zozlak/logging": "*"
-    }
+    },
+    "bin": [
+        "bin/arche-diss-cache-clear"
+    ]
 }
