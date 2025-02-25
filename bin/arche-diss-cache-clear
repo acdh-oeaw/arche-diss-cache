@@ -25,6 +25,7 @@
  */
 
 use acdhOeaw\arche\lib\dissCache\FileCache;
+use zozlak\logging\Log;
 
 $dir = __DIR__;
 while($dir !== '/' && !file_exists("$dir/vendor/autoload.php")) {
@@ -52,5 +53,5 @@ if ($argc === 2) {
 }
 $mode = $mode === 'size' ? FileCache::BY_SIZE : FileCache::BY_MOD_TIME;
 
-$cache = new FileCache($dir);
+$cache = new FileCache($dir, new Log('php://stdout'));
 $cache->clean($maxSize, $mode);

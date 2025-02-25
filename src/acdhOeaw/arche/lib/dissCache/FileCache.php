@@ -198,7 +198,7 @@ class FileCache {
         }
         arsort($byModTime);
         asort($bySize);
-        $this->log?->info("Total cache size $sizeSum, limit $maxSizeMb");
+        $this->log?->info("Total cache size " . round($sizeSum) . " MB, limit $maxSizeMb MB");
 
         // assure cache size limit
         if ($sizeSum > $maxSizeMb) {
@@ -214,8 +214,7 @@ class FileCache {
         // remove empty directories
         $dirIter = new DirectoryIterator($this->dir);
         foreach ($dirIter as $i) {
-            if (!$i->isDot() && $i->isDir() && count(scandir($i->getPathname()) ?: [
-]) === 2) {
+            if (!$i->isDot() && $i->isDir() && count(scandir($i->getPathname()) ?: []) === 2) {
                 rmdir($i->getPathname());
             }
         }
