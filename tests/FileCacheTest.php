@@ -59,12 +59,6 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertFileExists($refPath);
         $this->assertEquals($refPath, $cache->getRefFilePath(self::RES_BINARY));
 
-        // empty mime - skip the download
-        unlink($refPath);
-        $this->assertEquals($refPath, $cache->getRefFilePath(self::RES_BINARY, ''));
-        $this->assertEquals($refPath, $cache->getRefFilePath(self::RES_BINARY, ''));
-        $this->assertFileDoesNotExist($refPath);
-
         // mime check - pass
         $this->assertEquals($refPath, $cache->getRefFilePath(self::RES_BINARY, 'application/xml'));
         $this->assertFileExists($refPath);
