@@ -141,7 +141,7 @@ class FileCache {
         if (!is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
-        $pathTmp = "$path.tmp";
+        $pathTmp = "$path.". rand(0, 100000);
 
         $guzzleOpts['stream']      = true;
         $guzzleOpts['http_errors'] = false;
