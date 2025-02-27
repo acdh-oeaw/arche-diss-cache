@@ -130,8 +130,13 @@ class ResponseCache {
                 $respItem = $this->cache->get($this->lastResponseKey);
                 $respDiff = $respItem !== false ? $now - (new DateTimeImmutable($respItem->created))->getTimestamp() : 'not in cache';
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
-                    $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
-                    return ResponseCacheItem::deserialize($respItem->value);
+                    $respItem = ResponseCacheItem::deserialize($respItem->value);
+                    if (!$respItem->file || file_exists($respItem->body)) {
+                        $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
+                        return $respItem;
+                    } else {
+                        $this->log?->info("Regenerating response (missing file $respItem->body)");
+                    }
                 } else {
                     $this->log?->info("Regenerating response (respDiff $respDiff, respTtl $this->ttlResponse)");
                 }

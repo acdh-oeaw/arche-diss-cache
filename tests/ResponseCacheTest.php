@@ -201,6 +201,37 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertGreaterThan($t2 * 10, $t1);
     }
 
+    public function testMissingResponseItemFile(): void {
+        $resUrl      = 'https://arche.acdh.oeaw.ac.at/api/1238';
+        $filePath    = tempnam(sys_get_temp_dir(), '');
+        $count       = 0;
+        $missHandler = function (RepoResourceInterface $x, array $params) use ($filePath,
+                                                                               &$count): ResponseCacheItem {
+            $count++;
+            file_put_contents($filePath, (string) $count);
+            return new ResponseCacheItem($filePath, 302, $params, false, true);
+        };
+        $refResp   = new ResponseCacheItem($filePath, 302, [], false, true);
+        $respCache = $this->getResponseCache($missHandler);
+
+        $resp = $respCache->getResponse([], $resUrl);
+        $this->assertEquals($refResp, $resp);
+        $this->assertEquals('1', file_get_contents($filePath));
+
+        $refResp->hit = true;
+        $resp         = $respCache->getResponse([], $resUrl);
+        $this->assertEquals($refResp, $resp);
+        $this->assertEquals('1', file_get_contents($filePath));
+
+        unlink($filePath);
+        $refResp->hit = false;
+        $resp         = $respCache->getResponse([], $resUrl);
+        $this->assertEquals($refResp, $resp);
+        $this->assertEquals('2', file_get_contents($filePath));
+
+        unlink($filePath);
+    }
+
     /**
      * 
      * @param array<mixed> $params
