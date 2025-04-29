@@ -47,7 +47,7 @@ class CachePdo implements CacheInterface {
         $this->pdo = new PDO($connString);
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-        $this->lockPath = sys_get_temp_dir() . '/cachePdo_' . ($cacheId ?? hash('xxh128', __FILE__));
+        $this->lockPath = sys_get_temp_dir() . '/cachePdo_' . ($cacheId ?? hash('xxh128', $connString));
 
         $this->maintainDb();
     }
