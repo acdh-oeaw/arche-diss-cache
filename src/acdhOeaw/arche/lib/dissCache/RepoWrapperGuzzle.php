@@ -35,6 +35,7 @@ use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResource;
 use acdhOeaw\arche\lib\RepoResourceInterface;
 use acdhOeaw\arche\lib\exception\NotFound;
+use zozlak\ProxyClient;
 
 /**
  * Description of RepoCurl

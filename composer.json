@@ -16,7 +16,8 @@
         "guzzlehttp/guzzle": "^7",
         "acdh-oeaw/arche-lib": "^7",
         "zozlak/logging": "^1",
-        "psr/log": "^3.0"
+        "psr/log": "^3.0",
+        "zozlak/guzzle-proxy-client": "^1.0"
     },
     "autoload": {
         "psr-4": {

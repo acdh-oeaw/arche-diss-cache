@@ -34,6 +34,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use Psr\Log\LoggerInterface;
 use GuzzleHttp\Psr7\Request;
+use zozlak\ProxyClient;
 
 /**
  * Helper functions for managing files cache
