@@ -33,7 +33,6 @@ use FilesystemIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use Psr\Log\LoggerInterface;
-use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\Request;
 
 /**
@@ -141,11 +140,11 @@ class FileCache {
         if (!is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
-        $pathTmp = "$path.". rand(0, 100000);
+        $pathTmp = "$path." . rand(0, 100000);
 
         $guzzleOpts['stream']      = true;
         $guzzleOpts['http_errors'] = false;
-        $client                    = new Client($guzzleOpts);
+        $client                    = ProxyClient::factory($guzzleOpts);
         $resp                      = $client->send(new Request('get', $resUrl));
         if ($resp->getStatusCode() !== 200) {
             throw new FileCacheException('No such file', FileCacheException::NO_FILE);
@@ -214,7 +213,8 @@ class FileCache {
         // remove empty directories
         $dirIter = new DirectoryIterator($this->dir);
         foreach ($dirIter as $i) {
-            if (!$i->isDot() && $i->isDir() && count(scandir($i->getPathname()) ?: []) === 2) {
+            if (!$i->isDot() && $i->isDir() && count(scandir($i->getPathname()) ?: [
+]) === 2) {
                 rmdir($i->getPathname());
             }
         }

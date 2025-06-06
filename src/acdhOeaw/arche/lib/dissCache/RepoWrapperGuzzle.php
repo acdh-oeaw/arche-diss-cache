@@ -68,7 +68,7 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
         $guzzleOpts['allow_redirects']                    ??= [];
         $guzzleOpts['allow_redirects']['track_redirects'] = true;
         $guzzleOpts['http_errors']                        = false;
-        $this->client                                     = new Client($guzzleOpts);
+        $this->client                                     = ProxyClient::factory($guzzleOpts);
     }
 
     public function getResourceById(string $id, ?SearchConfig $config = null): RepoResourceInterface {
