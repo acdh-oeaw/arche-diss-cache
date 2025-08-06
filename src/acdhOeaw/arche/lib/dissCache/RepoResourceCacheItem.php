@@ -31,6 +31,7 @@ use quickRdf\DatasetNode;
 use quickRdf\DataFactory;
 use quickRdfIo\NQuadsParser;
 use quickRdfIo\NQuadsSerializer;
+use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoInterface;
 use acdhOeaw\arche\lib\RepoResourceInterface;
 use acdhOeaw\arche\lib\RepoResourceTrait;
@@ -69,6 +70,9 @@ class RepoResourceCacheItem implements RepoResourceInterface {
 
     public function __construct(string $url, ?RepoInterface $repo) {
         $this->metadata = new DatasetNode(DataFactory::namedNode($url));
+        if ($repo !== null) {
+            $this->repoInt = $repo;
+        }
     }
 
     public function loadMetadata(bool $force = false,
@@ -79,5 +83,12 @@ class RepoResourceCacheItem implements RepoResourceInterface {
         if (count($this->metadata) === 0 || $force) {
             throw new \BadMethodCallException("Not implemented");
         }
+    }
+
+    public function getRepo(): RepoInterface {
+        if (!isset($this->repoInt)) {
+            $this->repoInt = Repo::factoryFromUrl((string) $this->metadata->getNode());
+        }
+        return $this->repoInt;
     }
 }

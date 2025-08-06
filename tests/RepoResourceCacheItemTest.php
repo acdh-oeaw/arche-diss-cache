@@ -56,4 +56,10 @@ class RepoResourceCacheItemTest extends \PHPUnit\Framework\TestCase {
         $res = RepoResourceCacheItem::deserialize(RepoResourceCacheItem::serialize($res));
         $this->assertTrue($dataset->equals($res->getGraph()->getDataset()));
     }
+
+    public function testGetRepo(): void {
+        $resUri = DF::namedNode('https://arche.acdh.eoaw.ac.at/api/1819726');
+        $res    = new RepoResourceCacheItem((string) $resUri, null);
+        $this->assertInstanceOf(\acdhOeaw\arche\lib\Repo::class, $res->getRepo());
+    }
 }
