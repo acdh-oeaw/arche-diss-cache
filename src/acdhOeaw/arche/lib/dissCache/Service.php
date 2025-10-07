@@ -101,7 +101,8 @@ class Service {
      * 
      * @param array<mixed> $param
      */
-    public function serveRequest(string $id, array $param, bool $clearCache = false): ResponseCacheItem {
+    public function serveRequest(string $id, array $param,
+                                 bool $clearCache = false): ResponseCacheItem {
         try {
             $t0  = microtime(true);
             $cfg = $this->config->dissCacheService;
@@ -122,7 +123,7 @@ class Service {
             }
 
             $this->cacheDb ??= new CachePdo($cfg->db, $cfg->dbId ?? null);
-            
+
             $repos = [];
             foreach ($cfg->repoDb ?? [] as $i) {
                 $repos[] = new RepoWrapperRepoInterface(RepoDb::factory($i), true);
@@ -135,7 +136,7 @@ class Service {
             $sc->resourceProperties     = $cfg->resourceProperties ?? [];
             $sc->relativesProperties    = $cfg->relativesProperties ?? [];
 
-            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log);
+            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null);
 
             if ($clearCache) {
                 $this->log->info("Clearing the cache");
