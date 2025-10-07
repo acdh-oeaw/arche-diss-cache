@@ -75,7 +75,7 @@ class ResponseCache {
         $this->cache           = $cache;
         $this->missHandler     = $missHandler;
         $this->ttlResource     = $ttlResource;
-        $this->hardTtlResource = $ttlResource ?? $ttlResource * self::HARD_TTL_MULTIPLIER;
+        $this->hardTtlResource = $hardTtlResource ?? $ttlResource * self::HARD_TTL_MULTIPLIER;
         $this->ttlResponse     = $ttlResponse;
         $this->repos           = $repos;
         $this->searchCfg       = $config ?? new SearchConfig();
@@ -115,7 +115,7 @@ class ResponseCache {
                     }
                 }
                 $diffRes = $now - $resLastMod;
-                if ($resLastMod > $resCacheCreation || $diffRes > $this->hardTtlResource) {
+                if ($resLastMod > $resCacheCreation || $diffRes >= $this->hardTtlResource) {
                     // invalidate resource cache
                     $this->log?->debug("Invalidating resource's cache (resLastMod - resCacheCreation = " . ($resLastMod - $resCacheCreation) . ")");
                     $resItem = false;
