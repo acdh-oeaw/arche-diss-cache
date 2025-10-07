@@ -38,7 +38,8 @@ use Psr\Log\LoggerInterface;
  */
 class ResponseCache {
 
-    const HASH_ALGO = 'xxh128';
+    const HASH_ALGO           = 'xxh128';
+    const HARD_TTL_MULTIPLIER = 10;
 
     private CacheInterface $cache;
 
@@ -54,6 +55,7 @@ class ResponseCache {
      */
     private $missHandler;
     private int $ttlResource;
+    private int $hardTtlResource;
     private int $ttlResponse;
     private SearchConfig $searchCfg;
     private LoggerInterface | null $log;
@@ -68,14 +70,16 @@ class ResponseCache {
     public function __construct(CacheInterface $cache, callable $missHandler,
                                 int $ttlResource, int $ttlResponse,
                                 array $repos, ?SearchConfig $config = null,
-                                ?LoggerInterface $log = null) {
-        $this->cache       = $cache;
-        $this->missHandler = $missHandler;
-        $this->ttlResource = $ttlResource;
-        $this->ttlResponse = $ttlResponse;
-        $this->repos       = $repos;
-        $this->searchCfg   = $config ?? new SearchConfig();
-        $this->log         = $log;
+                                ?LoggerInterface $log = null,
+                                ?int $hardTtlResource = null) {
+        $this->cache           = $cache;
+        $this->missHandler     = $missHandler;
+        $this->ttlResource     = $ttlResource;
+        $this->hardTtlResource = $ttlResource ?? $ttlResource * self::HARD_TTL_MULTIPLIER;
+        $this->ttlResponse     = $ttlResponse;
+        $this->repos           = $repos;
+        $this->searchCfg       = $config ?? new SearchConfig();
+        $this->log             = $log;
     }
 
     /**
@@ -110,7 +114,8 @@ class ResponseCache {
                         
                     }
                 }
-                if ($resLastMod > $resCacheCreation) {
+                $diffRes = $now - $resLastMod;
+                if ($resLastMod > $resCacheCreation || $diffRes > $this->hardTtlResource) {
                     // invalidate resource cache
                     $this->log?->debug("Invalidating resource's cache (resLastMod - resCacheCreation = " . ($resLastMod - $resCacheCreation) . ")");
                     $resItem = false;
