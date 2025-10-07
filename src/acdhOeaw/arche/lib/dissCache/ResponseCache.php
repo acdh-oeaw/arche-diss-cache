@@ -114,7 +114,6 @@ class ResponseCache {
                         
                     }
                 }
-                $diffRes = $now - $resLastMod;
                 if ($resLastMod > $resCacheCreation || $diffRes >= $this->hardTtlResource) {
                     // invalidate resource cache
                     $this->log?->debug("Invalidating resource's cache (resLastMod - resCacheCreation = " . ($resLastMod - $resCacheCreation) . ", diffRes $diffRes, resHardTtl $this->hardTtlResource)");
