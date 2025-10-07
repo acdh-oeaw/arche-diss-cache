@@ -126,7 +126,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $repoDouble->method('getModificationTimestamp')->willReturn(time() - 10);
         $repoDouble->method('getResourceById')->willReturn($this->getResourceDouble($resUrl));
 
-        $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble]);
+        $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble], hardTtlRes: 100);
         $paramsHash = $respCache->hashParams($params, $resUrl);
 
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
@@ -151,7 +151,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $repoDouble->method('getModificationTimestamp')->willReturn(time() - 10);
         $repoDouble->method('getResourceById')->willReturn($this->getResourceDouble($resUrl));
 
-        $respCache  = $this->getResponseCache($this->missHandler, 0, 0, [$repoDouble]);
+        $respCache  = $this->getResponseCache($this->missHandler, 0, 0, [$repoDouble], hardTtlRes: 100);
         $paramsHash = $respCache->hashParams($params, $resUrl);
 
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
@@ -160,6 +160,31 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $refLog = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\n";
         $resp   = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
+        $this->assertEquals($refResp, $resp);
+        $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
+        $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
+    }
+    
+    public function testResourceNotModifiedHardTtl(): void {
+        $params     = ['foo' => 'bar'];
+        $resUrl     = 'https://arche.acdh.oeaw.ac.at/api/1238';
+        $refResp    = new ResponseCacheItem($resUrl, 302, $params, false);
+        $repoDouble = $this->createStub(RepoWrapperInterface::class);
+        $repoDouble->method('getModificationTimestamp')->willReturn(time() - 10);
+        $repoDouble->method('getResourceById')->willReturn($this->getResourceDouble($resUrl));
+
+        $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble], hardTtlRes: 0);
+        $paramsHash = $respCache->hashParams($params, $resUrl);
+
+        $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
+
+        unlink(self::$logPath);
+        $refLog1      = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = -";
+        $refLog2      = "/Invalidating resource's cache [(]resLastMod - resCacheCreation = -[0-9]+, diffRes [0-9]+, resHardTtl 0[)]/m";
+        $resp         = $respCache->getResponse($params, $resUrl);
+        $this->assertStringStartsWith($refLog1, file_get_contents(self::$logPath));
+        $this->assertMatchesRegularExpression($refLog2, file_get_contents(self::$logPath));
+        $refResp->hit = false;
         $this->assertEquals($refResp, $resp);
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
@@ -254,9 +279,10 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
      */
     private function getResponseCache(callable $missHandler, int $ttlRes = 1,
                                       int $ttlResp = 1, ?array $repos = null,
-                                      ?SearchConfig $config = null): ResponseCache {
+                                      ?SearchConfig $config = null,
+                                      ?int $hardTtlRes = null): ResponseCache {
         $repos ??= [self::$repoWrapperRepo, self::$repoWrapperGuzzle];
-        return new ResponseCache($this->cache, $missHandler, $ttlRes, $ttlResp, $repos, $config, $this->log);
+        return new ResponseCache($this->cache, $missHandler, $ttlRes, $ttlResp, $repos, $config, $this->log, $hardTtlRes);
     }
 
     private function getResourceDouble(string $uri): RepoResourceInterface {
