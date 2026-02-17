@@ -27,6 +27,9 @@
 use acdhOeaw\arche\lib\dissCache\FileCache;
 use zozlak\logging\Log;
 
+$argc ??= 0;
+$argv ??= [];
+
 $dir = __DIR__;
 while($dir !== '/' && !file_exists("$dir/vendor/autoload.php")) {
     $dir = dirname($dir);
