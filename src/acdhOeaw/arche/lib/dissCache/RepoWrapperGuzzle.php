@@ -45,12 +45,14 @@ use zozlak\ProxyClient;
 class RepoWrapperGuzzle implements RepoWrapperInterface {
 
     private bool $checkModDate;
+
     /**
      * 
      * @var array<string, mixed>
      */
     private array $guzzleOpts;
     private Client $client;
+
     /**
      * 
      * @var array<Repo>
@@ -82,7 +84,7 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
         if (!$this->checkModDate) {
             return PHP_INT_MAX;
         }
-        
+
         $uri                        = $this->resolve($id);
         $repo                       = $this->getRepo($uri);
         $config                     = new SearchConfig();
@@ -104,12 +106,12 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
         }
         $redirects = $resp->getHeader('X-Guzzle-Redirect-History');
         $url       = end($redirects) ?: $id;
-        $uri       = preg_replace('`/metadata$`', '', $url);
+        $uri       = (string) preg_replace('`/metadata$`', '', $url);
         return $uri;
     }
 
     private function getRepo(string $uri): Repo {
-        $baseUrl               = preg_replace('`[0-9]+$`', '', $uri);
+        $baseUrl               = (string) preg_replace('`[0-9]+$`', '', $uri);
         $this->repos[$baseUrl] ??= new Repo($baseUrl, $this->guzzleOpts);
         return $this->repos[$baseUrl];
     }

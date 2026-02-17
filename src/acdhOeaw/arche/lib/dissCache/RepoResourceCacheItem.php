@@ -52,6 +52,7 @@ class RepoResourceCacheItem implements RepoResourceInterface {
         self::$serializer ??= new NQuadsSerializer();
         $data             = [
             'uri'      => (string) $res->getUri(),
+            /** @phpstan-ignore argument.type */
             'metadata' => self::$serializer->serialize($res->getGraph()->getDataset()),
         ];
         return (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);

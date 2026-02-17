@@ -173,6 +173,9 @@ class ResponseCache {
             $this->log?->info("Caching the response under a key $this->lastResponseKey");
             $this->cache->set([$this->lastResponseKey], $value->serialize(), null);
         } finally {
+            if (!$res) {
+                throw new NotFound("Resource $resId can not be found", 400);
+            }
             if (!($res instanceof RepoResourceCacheItem)) {
                 // so late to preserve any changes done to the resource metadata by the missHandler
                 $this->log?->debug("Caching the resource");

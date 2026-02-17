@@ -59,6 +59,25 @@ use acdhOeaw\arche\lib\exception\NotFound;
  */
 class Service {
 
+    /**
+     * Provides a standardized way to determine if the cache should be invalidated
+     */
+    static public function getClearCache(bool $httpCacheControl = true,
+                                         string $noCacheQueryParam = 'noCache'): bool {
+        if ($httpCacheControl) {
+            $cacheControl = array_map(fn($x) => strtolower(trim($x)), explode(',', $_SERVER['HTTP_CACHE_CONTROL'] ?? ''));
+            $noCache      = count(array_filter($cacheControl, fn($x) => $x === 'no-cache')) > 0;
+            $maxAge       = count(array_filter($cacheControl, fn($x) => $x === 'max-age=0')) > 0;
+            if ($noCache || $maxAge) {
+                return true;
+            }
+        }
+        if (!empty($noCacheQueryParam) && isset($_GET[$noCacheQueryParam])) {
+            return true;
+        }
+        return false;
+    }
+
     private object $config;
     private Log $log;
     private CachePdo $cacheDb;
@@ -70,10 +89,11 @@ class Service {
     private $clbck;
 
     public function __construct(string $confFile) {
-        $this->config = json_decode(json_encode(yaml_parse_file($confFile)));
+        $this->config = json_decode((string) json_encode(yaml_parse_file($confFile)));
 
         $logId     = sprintf("%08d", rand(0, 99999999));
         $tmpl      = "{TIMESTAMP}:$logId:{LEVEL}\t{MESSAGE}";
+        /** @phpstan-ignore property.notFound */
         $logCfg    = $this->config->dissCacheService->log;
         $this->log = new Log($logCfg->file, $logCfg->level, $tmpl);
     }
@@ -102,9 +122,10 @@ class Service {
      * @param array<mixed> $param
      */
     public function serveRequest(string $id, array $param,
-                                 bool $clearCache = false): ResponseCacheItem {
+                                 bool | null $clearCache = null): ResponseCacheItem {
         try {
             $t0  = microtime(true);
+            /** @phpstan-ignore property.notFound */
             $cfg = $this->config->dissCacheService;
 
             if (empty($id)) {
@@ -121,6 +142,8 @@ class Service {
             if (!$allowed) {
                 throw new ServiceException("Requested resource $id not in allowed namespace", 400);
             }
+
+            $clearCache ??= self::getClearCache();
 
             $this->cacheDb ??= new CachePdo($cfg->db, $cfg->dbId ?? null);
 
@@ -144,14 +167,18 @@ class Service {
             }
 
             $response = $cache->getResponse($param, $id);
+            $this->setCacheControlHeader($response);
             $this->log->info("Ended in " . round(microtime(true) - $t0, 3) . " s");
             return $response;
         } catch (\Throwable $e) {
             $response = $this->processException($e);
             if ($e instanceof ServiceException && ($cache ?? null) instanceof ResponseCache) {
-                $key = $cache->getLastResponseKey();
+                $key = (string) $cache->getLastResponseKey();
                 $this->log->info("Caching the error response under a key $key");
                 $this->cacheDb->set([$key], $response->serialize(), null);
+                $this->setCacheControlHeader($response);
+            } else {
+                $response->headers['Cache-Control'] = 'no-cache';
             }
             return $response;
         }
@@ -169,6 +196,12 @@ class Service {
         }
         $body    = $ordinaryException ? $e->getMessage() . "\n" : "Internal Server Error\n";
         $headers = $e instanceof ServiceException ? $e->getHeaders() : [];
-        return new ResponseCacheItem($body, $code, $headers, false);
+        return new ResponseCacheItem($body, (int) $code, $headers, false);
+    }
+
+    private function setCacheControlHeader(ResponseCacheItem $response): void {
+        /** @phpstan-ignore property.notFound */
+        $ttl                                 = min($this->config->dissCacheService->ttl->response, $this->config->dissCacheService->ttl->resource);
+        $response->headers['Cache-Control:'] = "max-age=$ttl, must-revalidate, immutable";
     }
 }

@@ -28,6 +28,7 @@ namespace acdhOeaw\arche\lib\dissCache;
 
 use quickRdf\Dataset;
 use quickRdf\DataFactory as DF;
+use acdhOeaw\arche\lib\RepoInterface;
 
 /**
  * Description of RepoResourceCacheItemTest
@@ -59,7 +60,19 @@ class RepoResourceCacheItemTest extends \PHPUnit\Framework\TestCase {
 
     public function testGetRepo(): void {
         $resUri = DF::namedNode('https://arche.acdh.oeaw.ac.at/api/1819726');
-        $res    = new RepoResourceCacheItem((string) $resUri, null);
+
+        $res = new RepoResourceCacheItem((string) $resUri, null);
         $this->assertInstanceOf(\acdhOeaw\arche\lib\Repo::class, $res->getRepo());
+
+        $repo = $this->createStub(RepoInterface::class);
+        $res  = new RepoResourceCacheItem((string) $resUri, $repo);
+        $this->assertEquals($repo, $res->getRepo());
+    }
+
+    public function testLoadMetadata(): void {
+        $resUri = DF::namedNode('https://arche.acdh.oeaw.ac.at/api/1819726');
+        $res    = new RepoResourceCacheItem((string) $resUri, null);
+        $this->expectException(\BadMethodCallException::class);
+        $res->loadMetadata();
     }
 }

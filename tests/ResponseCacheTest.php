@@ -30,6 +30,7 @@ use quickRdf\DataFactory;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResourceInterface;
+use acdhOeaw\arche\lib\exception\NotFound;
 use acdhOeaw\arche\lib\dissCache\RepoWrapperInterface;
 use zozlak\logging\Log;
 
@@ -71,6 +72,31 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->missHandler = function (RepoResourceInterface $x, array $params): ResponseCacheItem {
             return new ResponseCacheItem((string) $x->getUri(), 302, $params, false);
         };
+    }
+
+    public function testHashParams(): void {
+        $respCache = $this->getResponseCache($this->missHandler);
+
+        $hash1 = $respCache->hashParams('foo', 'id');
+        $hash2 = $respCache->hashParams(['foo'], 'id');
+        $this->assertEquals($hash2, $hash1);
+
+        $param = ['foo' => 'bar'];
+        $hash1 = $respCache->hashParams($param, 'id');
+        $hash2 = $respCache->hashParams((object) $param, 'id');
+        $this->assertEquals($hash2, $hash1);
+
+        $hash1 = $respCache->hashParams(['a' => 1, 'b' => 2], 'id');
+        $hash2 = $respCache->hashParams(['b' => 2, 'a' => 1], 'id');
+        $this->assertEquals($hash2, $hash1);
+
+        $hash1 = $respCache->hashParams('foo', 'id1');
+        $hash2 = $respCache->hashParams('foo', 'id2');
+        $this->assertNotEquals($hash2, $hash1);
+
+        $hash1 = $respCache->hashParams(['a' => 1, 'b' => 2], 'id');
+        $hash2 = $respCache->hashParams(['a' => 1, 'b' => '2'], 'id');
+        $this->assertNotEquals($hash2, $hash1);
     }
 
     public function testSimple(): void {
@@ -164,7 +190,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
     }
-    
+
     public function testResourceNotModifiedHardTtl(): void {
         $params     = ['foo' => 'bar'];
         $resUrl     = 'https://arche.acdh.oeaw.ac.at/api/1238';
@@ -255,6 +281,15 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertEquals('2', file_get_contents($filePath));
 
         unlink($filePath);
+    }
+
+    public function testNotFound(): void {
+        $repo      = $this->createStub(RepoWrapperInterface::class);
+        $repo->method('getResourceById')->willThrowException(new NotFound());
+        $respCache = $this->getResponseCache($this->missHandler, repos: [$repo]);
+
+        $this->expectException(NotFound::class);
+        $respCache->getResponse([], 'https://arche.acdh.oeaw.ac.at/api/1234');
     }
 
     /**

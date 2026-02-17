@@ -35,4 +35,5 @@ class FileCacheException extends \Exception {
 
     const NO_BINARY = 1;
     const NO_FILE   = 2;
+    const TOO_LARGE = 3;
 }

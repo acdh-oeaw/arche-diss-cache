@@ -17,7 +17,8 @@ jobs:
         composer update
     - name: phpstan
       run: |
-        vendor/bin/phpstan analyze -l 6 src bin
+        vendor/bin/phpstan analyze -l 8 src bin/*
+        vendor/bin/phpstan analyze -l 6 tests
     - name: phpunit
       run: |
         mkdir -p build/logs

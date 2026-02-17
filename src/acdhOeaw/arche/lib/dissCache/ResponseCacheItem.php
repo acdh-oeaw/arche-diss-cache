@@ -26,12 +26,18 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use RuntimeException;
+use zozlak\httpAccept\Accept;
+use zozlak\httpAccept\NoMatchException;
+
 /**
  * Description of ResponseCacheItem
  *
  * @author zozlak
  */
 class ResponseCacheItem {
+
+    const OUTPUT_CHUNK = 1048576; // 1 MB
 
     static public function deserialize(string $data): self {
         $data            = json_decode($data);
@@ -73,7 +79,7 @@ class ResponseCacheItem {
         return (string) json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    public function send(bool $compress = false): void {
+    public function send(bool $compress = true): void {
         http_response_code($this->responseCode);
         foreach ($this->headers as $header => $values) {
             $values = is_array($values) ? $values : [$values];
@@ -81,13 +87,49 @@ class ResponseCacheItem {
                 header("$header: $i");
             }
         }
-        if ($compress && str_contains($_SERVER['HTTP_ACCEPT_ENCODING'] ?? '', 'gzip') && $this->file) {
-            header('Content-Encoding: gzip');
-            echo gzencode($this->body);
-        } elseif ($this->file) {
+        if ($compress) {
+            $encoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? 'identity';
+            $encoding = new Accept($encoding);
+            try {
+                $encoding = $encoding->getBestMatch(['gzip', 'deflate'])->type;
+                $this->sendCompressed($encoding);
+                return;
+            } catch (NoMatchException) {
+                
+            }
+        }
+
+        if ($this->file) {
             readfile($this->body);
         } else {
             echo $this->body;
+        }
+    }
+
+    private function sendCompressed(string $encoding): void {
+        $encoding = match ($encoding) {
+            'gzip' => ZLIB_ENCODING_GZIP,
+            'deflate' => ZLIB_ENCODING_DEFLATE,
+            default => throw new \BadMethodCallException('Unsupported encoding'),
+        };
+        header("Content-Encoding: $encoding");
+        if (!$this->file) {
+            echo gzencode($this->body, -1, $encoding);
+        } else {
+            $file = fopen($this->body, 'r');
+            if ($file === false) {
+                throw new ServiceException("Can't open output file", 500);
+            }
+            $encoder = deflate_init($encoding);
+            if ($encoder === false) {
+                throw new ServiceException("Can't initialize output encoder", 500);
+            }
+            while (!feof($file)) {
+                $chunk = (string) fread($file, self::OUTPUT_CHUNK);
+                echo deflate_add($encoder, $chunk, ZLIB_BLOCK);
+            }
+            echo deflate_add($encoder, '', ZLIB_FINISH);
+            fclose($file);
         }
     }
 }

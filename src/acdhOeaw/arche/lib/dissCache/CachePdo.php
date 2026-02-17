@@ -40,7 +40,7 @@ class CachePdo implements CacheInterface {
     private string $driver;
 
     public function __construct(string $connString, ?string $cacheId = null) {
-        $this->driver = strtolower(preg_replace('/:.*$/', '', $connString));
+        $this->driver = strtolower((string) preg_replace('/:.*$/', '', $connString));
         if ($this->driver !== 'sqlite') {
             throw new \RuntimeException("Database driver $this->driver not supported");
         }

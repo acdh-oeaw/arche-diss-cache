@@ -93,14 +93,20 @@ class FileCache {
      *   Passing an empty value skips the check.
      * @param array<string, mixed> $guzzleOpts guzzle Client options to be used
      *   if a resource binary is to be downloaded. Allows passing e.g. credentials.
+     * @param float $maxSizeMb Allows to limit maximum downloaded file size. If the
+     *   to-be-downloaded file is bigger, the FileCacheException is being thrown.
+     *   0 means that files of any size can be downloaded.
+     *   
      */
     public function getRefFilePath(string $resUrl, string $expectedMime = '',
-                                   array $guzzleOpts = []): string {
+                                   array $guzzleOpts = [], float $maxSizeMb = 0): string {
         // direct local access
         foreach ($this->localAccess as $nmsp => $nmspCfg) {
             if (str_starts_with($resUrl, $nmsp)) {
                 $id     = (int) preg_replace('`^.*/`', '', $resUrl);
+                /** @phpstan-ignore property.notFound */
                 $level  = $nmspCfg->level;
+                /** @phpstan-ignore property.notFound */
                 $path   = $nmspCfg->dir;
                 $idPart = $id;
                 while ($level > 0) {
@@ -119,7 +125,7 @@ class FileCache {
         // cache access
         $path = $this->dir . '/' . hash('xxh128', $resUrl) . '/ref';
         if (!file_exists($path)) {
-            $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts);
+            $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts, (int) ($maxSizeMb * 1048576));
         }
         return $path;
     }
@@ -134,19 +140,26 @@ class FileCache {
      */
     private function fetchResourceBinary(string $path, string $resUrl,
                                          string $expectedMime,
-                                         array $guzzleOpts = []): void {
+                                         array $guzzleOpts, int $maxSize): void {
         $this->log?->info("Downloading " . $resUrl);
 
         $dir = dirname($path);
         if (!is_dir($dir)) {
             mkdir($dir, 0700, true);
         }
-        $pathTmp = "$path." . rand(0, 100000);
+        $pathTmp = "$path." . rand();
 
         $guzzleOpts['stream']      = true;
         $guzzleOpts['http_errors'] = false;
         $client                    = ProxyClient::factory($guzzleOpts);
-        $resp                      = $client->send(new Request('get', $resUrl));
+        if ($maxSize > 0) {
+            $resp = $client->send(new Request('head', $resUrl));
+            $size = (int) ($resp->getHeader('Content-Length')[0] ?? 0);
+            if ($size > $maxSize) {
+                throw new FileCacheException('Requested file too large', FileCacheException::TOO_LARGE);
+            }
+        }
+        $resp = $client->send(new Request('get', $resUrl));
         if ($resp->getStatusCode() !== 200) {
             throw new FileCacheException('No such file', FileCacheException::NO_FILE);
         }
@@ -156,11 +169,18 @@ class FileCache {
             $this->log?->error("Mime mismatch: downloaded $realMime, expected $expectedMime");
             throw new FileCacheException('The requested file misses binary content', FileCacheException::NO_BINARY);
         }
-        $body  = $resp->getBody();
-        $fout  = fopen($pathTmp, 'w') ?: throw new RuntimeException("Can't open $pathTmp for writing");
-        $chunk = 10 ^ 6; // 1 MB
+        $body      = $resp->getBody();
+        $fout      = fopen($pathTmp, 'w') ?: throw new RuntimeException("Can't open $pathTmp for writing");
+        $chunk     = 10 ^ 6; // 1 MB
+        $bytesRead = 0;
         while (!$body->eof()) {
             fwrite($fout, (string) $body->read($chunk));
+            $bytesRead += $chunk;
+            if ($maxSize > 0 && $bytesRead > $maxSize) {
+                fclose($fout);
+                unlink($pathTmp);
+                throw new FileCacheException('Requested file too large', FileCacheException::TOO_LARGE);
+            }
         }
         fclose($fout);
         if (!file_exists($path)) {
@@ -215,7 +235,7 @@ class FileCache {
         $dirIter = new DirectoryIterator($this->dir);
         foreach ($dirIter as $i) {
             if (!$i->isDot() && $i->isDir() && count(scandir($i->getPathname()) ?: [
-]) === 2) {
+                        ]) === 2) {
                 rmdir($i->getPathname());
             }
         }

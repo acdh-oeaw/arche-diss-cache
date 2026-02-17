@@ -41,27 +41,58 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         foreach (array_merge(glob('/tmp/__log__'), glob('/tmp/cachePdo*')) as $i) {
             unlink($i);
         }
+
+        unset($_SERVER['HTTP_CACHE_CONTROL']);
+        unset($_GET['noCache']);
+    }
+
+    public function testGetClearCache(): void {
+        $this->assertFalse(Service::getClearCache());
+
+        $_SERVER['HTTP_CACHE_CONTROL'] = 'no-cache';
+        $this->assertTrue(Service::getClearCache());
+        $this->assertFalse(Service::getClearCache(false));
+
+        $_SERVER['HTTP_CACHE_CONTROL'] = 'max-age=0';
+        $this->assertTrue(Service::getClearCache());
+        $this->assertFalse(Service::getClearCache(false));
+
+        $_SERVER['HTTP_CACHE_CONTROL'] = 'no-cache, max-age=1000';
+        $this->assertTrue(Service::getClearCache(true));
+        $this->assertFalse(Service::getClearCache(false));
+
+        $_SERVER['HTTP_CACHE_CONTROL'] = 'no-store, no-transform';
+        $_GET['foo']                   = '';
+        $this->assertTrue(Service::getClearCache(true, 'foo'));
+        $this->assertFalse(Service::getClearCache());
+
+        $_GET['noCache'] = '';
+        $this->assertTrue(Service::getClearCache());
     }
 
     public function testService(): void {
         $clbck = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
-        $service  = new Service(__DIR__ . '/config.yaml');
+        $service = new Service(__DIR__ . '/config.yaml');
+
+        $this->assertInstanceOf(\zozlak\logging\Log::class, $service->getLog());
+        $this->assertEquals(json_decode(json_encode(yaml_parse_file(__DIR__ . '/config.yaml'))), $service->getConfig());
+
         $service->setCallback($clbck);
         $param    = ['foo' => 'bar', 'baz' => '3'];
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
-        $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $param, false);
+        $headers  = array_merge($param, ['Cache-Control:' => 'max-age=3600, must-revalidate, immutable']);
+        $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
         $this->assertEquals($ref, $response);
 
         $response = $service->serveRequest('https://foo/bar', $param);
-        $ref      = new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, [
-            ], false);
+        $headers  = ['Cache-Control' => 'no-cache'];
+        $ref      = new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, $headers, false);
         $this->assertEquals($ref, $response);
 
         $response = $service->serveRequest('', $param);
-        $ref      = new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, [
-            ], false);
+        $ref      = new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, $headers, false);
         $this->assertEquals($ref, $response);
     }
 
@@ -69,10 +100,14 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $clbck = function (RepoResourceInterface $res, array $params): ResponseCacheItem {
             throw new ServiceException('foo', 456, null, ['custom' => 'header']);
         };
-        $service = new Service(__DIR__ . '/config.yaml');
+        $service    = new Service(__DIR__ . '/config.yaml');
         $service->setCallback($clbck);
-        $respRef = new ResponseCacheItem("foo\n", 456, ['custom' => 'header'], false);
-        $param   = [];
+        $headersRef = [
+            'custom'         => 'header',
+            'Cache-Control:' => 'max-age=3600, must-revalidate, immutable',
+        ];
+        $respRef    = new ResponseCacheItem("foo\n", 456, $headersRef, false);
+        $param      = [];
 
         $t0           = microtime(true);
         $resp1        = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
@@ -90,7 +125,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
 
     public function testClearCache(): void {
         $param   = [];
-        $refResp = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $param, false);
+        $headers = ['Cache-Control:' => 'max-age=3600, must-revalidate, immutable'];
+        $refResp = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
         $clbck   = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };

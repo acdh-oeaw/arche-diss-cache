@@ -26,6 +26,9 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use DateTimeImmutable;
+use termTemplates\PredicateTemplate as PT;
+use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResource;
 use acdhOeaw\arche\lib\exception\NotFound;
 
@@ -58,9 +61,25 @@ class RepoWrapperGuzzleTest extends \PHPUnit\Framework\TestCase {
         $repo = new RepoWrapperGuzzle();
         try {
             $res = $repo->getResourceById('https://arche.acdh.oeaw.ac.at/api/0');
+            /** @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
         } catch (NotFound) {
+            /** @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
+    }
+
+    public function testGetModificationTimestamp(): void {
+        $wrapper = new RepoWrapperGuzzle();
+        $this->assertEquals(PHP_INT_MAX, $wrapper->getModificationTimestamp(''));
+
+        $uri     = 'https://arche.acdh.oeaw.ac.at/api/19641';
+        $refRepo = Repo::factoryFromUrl('https://arche.acdh.oeaw.ac.at/api/');
+        $modProp = $refRepo->getSchema()->modificationDate;
+        $refRes  = $refRepo->getResourceById($uri);
+        $refTime = $refRes->getGraph()->getObjectValue(new PT($modProp));
+        $refTime = (new DateTimeImmutable($refTime))->getTimestamp();
+        $wrapper = new RepoWrapperGuzzle(true, []);
+        $this->assertEquals($refTime, $wrapper->getModificationTimestamp($uri));
     }
 }

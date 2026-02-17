@@ -71,6 +71,7 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         unlink($refPath);
         try {
             $cache->getRefFilePath(self::RES_BINARY, 'foo/bar');
+            /** @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
         } catch (FileCacheException $e) {
             $this->assertEquals(FileCacheException::NO_BINARY, $e->getCode());
@@ -94,6 +95,7 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         unlink($refPath);
         try {
             $cache->getRefFilePath(self::RES_META, 'foo/bar');
+            /** @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
         } catch (FileCacheException $e) {
             $this->assertEquals(FileCacheException::NO_BINARY, $e->getCode());
@@ -116,16 +118,17 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         foreach (['', 'application/xml', 'foo/bar'] as $mime) {
             try {
                 $cache->getRefFilePath(self::RES_BINARY, $mime);
+                /** @phpstan-ignore method.impossibleType */
                 $this->assertTrue(false, $mime);
             } catch (FileCacheException $e) {
-                $this->assertEquals(FileCacheException::NO_BINARY, $e->getCode(), $mime ?? 'NULL');
+                $this->assertEquals(FileCacheException::NO_BINARY, $e->getCode(), $mime);
             }
         }
 
         file_put_contents($refPath, 'FOO');
         // no corresponding local file
         foreach (['', 'application/xml', 'foo/bar'] as $mime) {
-            $this->assertEquals($refPath, $cache->getRefFilePath(self::RES_BINARY, $mime ?? 'NULL'));
+            $this->assertEquals($refPath, $cache->getRefFilePath(self::RES_BINARY, $mime));
         }
     }
 
@@ -171,5 +174,32 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         $cache->clean(0.5, FileCache::BY_MOD_TIME);
         $this->assertFileDoesNotExist(self::CACHE_DIR . '/1MB');
         $this->assertFileDoesNotExist(self::CACHE_DIR . '/2MB');
+
+        $emptyDir = self::CACHE_DIR . '/emptydir';
+        mkdir($emptyDir);
+        $cache->clean(100, FileCache::BY_SIZE);
+        $this->assertDirectoryDoesNotExist($emptyDir);
+
+        $this->expectException(\BadMethodCallException::class);
+        $cache->clean(0, -100);
+    }
+
+    public function testTooLarge(): void {
+        $url   = 'https://zozlak.org/zdjecia/2025-07-06%20Western%20Alps/07%20Tacul/20250710_080404572_HDR.jpg';
+        $cache = new FileCache(self::CACHE_DIR);
+        $path  = $cache->getRefFilePath($url, '', [], 0.3);
+        $this->assertFileExists($path);
+        unlink($path);
+        $this->expectException(FileCacheException::class);
+        $this->expectExceptionCode(FileCacheException::TOO_LARGE);
+        $cache->getRefFilePath($url, '', [], 0.1);
+    }
+
+    public function testNoFile(): void {
+        $cache = new FileCache(self::CACHE_DIR);
+        $url   = 'https://zozlak.org/zdjecia/foobar.jpg';
+        $this->expectException(FileCacheException::class);
+        $this->expectExceptionCode(FileCacheException::NO_FILE);
+        $cache->getRefFilePath($url);
     }
 }
