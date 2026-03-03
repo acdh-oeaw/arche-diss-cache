@@ -46,28 +46,28 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         unset($_GET['noCache']);
     }
 
-    public function testGetClearCache(): void {
-        $this->assertFalse(Service::getClearCache());
+    public function testGetNoCache(): void {
+        $this->assertFalse(Service::getNoCache());
 
         $_SERVER['HTTP_CACHE_CONTROL'] = 'no-cache';
-        $this->assertTrue(Service::getClearCache());
-        $this->assertFalse(Service::getClearCache(false));
+        $this->assertTrue(Service::getNoCache());
+        $this->assertFalse(Service::getNoCache(false));
 
         $_SERVER['HTTP_CACHE_CONTROL'] = 'max-age=0';
-        $this->assertTrue(Service::getClearCache());
-        $this->assertFalse(Service::getClearCache(false));
+        $this->assertTrue(Service::getNoCache());
+        $this->assertFalse(Service::getNoCache(false));
 
         $_SERVER['HTTP_CACHE_CONTROL'] = 'no-cache, max-age=1000';
-        $this->assertTrue(Service::getClearCache(true));
-        $this->assertFalse(Service::getClearCache(false));
+        $this->assertTrue(Service::getNoCache(true));
+        $this->assertFalse(Service::getNoCache(false));
 
         $_SERVER['HTTP_CACHE_CONTROL'] = 'no-store, no-transform';
         $_GET['foo']                   = '';
-        $this->assertTrue(Service::getClearCache(true, 'foo'));
-        $this->assertFalse(Service::getClearCache());
+        $this->assertTrue(Service::getNoCache(true, 'foo'));
+        $this->assertFalse(Service::getNoCache());
 
         $_GET['noCache'] = '';
-        $this->assertTrue(Service::getClearCache());
+        $this->assertTrue(Service::getNoCache());
     }
 
     public function testService(): void {
