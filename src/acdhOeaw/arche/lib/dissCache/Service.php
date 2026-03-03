@@ -63,7 +63,7 @@ class Service {
      * Provides a standardized way to determine if the cache should be invalidated
      */
     static public function getNoCache(bool $httpCacheControl = true,
-                                         string $noCacheQueryParam = 'noCache'): bool {
+                                      string $noCacheQueryParam = 'noCache'): bool {
         if ($httpCacheControl) {
             $cacheControl = array_map(fn($x) => strtolower(trim($x)), explode(',', $_SERVER['HTTP_CACHE_CONTROL'] ?? ''));
             $noCache      = count(array_filter($cacheControl, fn($x) => $x === 'no-cache')) > 0;
@@ -115,6 +115,10 @@ class Service {
 
     public function getLog(): Log {
         return $this->log;
+    }
+
+    public function setCache(CachePdo $cache): void {
+        $this->cache = $cache;
     }
 
     /**
