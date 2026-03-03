@@ -62,7 +62,7 @@ class Service {
     /**
      * Provides a standardized way to determine if the cache should be invalidated
      */
-    static public function getClearCache(bool $httpCacheControl = true,
+    static public function getNoCache(bool $httpCacheControl = true,
                                          string $noCacheQueryParam = 'noCache'): bool {
         if ($httpCacheControl) {
             $cacheControl = array_map(fn($x) => strtolower(trim($x)), explode(',', $_SERVER['HTTP_CACHE_CONTROL'] ?? ''));
@@ -122,7 +122,7 @@ class Service {
      * @param array<mixed> $param
      */
     public function serveRequest(string $id, array $param,
-                                 bool | null $clearCache = null): ResponseCacheItem {
+                                 bool | null $noCache = null): ResponseCacheItem {
         try {
             $t0  = microtime(true);
             /** @phpstan-ignore property.notFound */
@@ -143,7 +143,7 @@ class Service {
                 throw new ServiceException("Requested resource $id not in allowed namespace", 400);
             }
 
-            $clearCache ??= self::getClearCache();
+            $noCache ??= self::getNoCache();
 
             $this->cacheDb ??= new CachePdo($cfg->db, $cfg->dbId ?? null);
 
@@ -161,12 +161,7 @@ class Service {
 
             $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null);
 
-            if ($clearCache) {
-                $this->log->info("Clearing the cache");
-                $cache->pruneCacheForResource($id);
-            }
-
-            $response = $cache->getResponse($param, $id);
+            $response = $cache->getResponse($param, $id, $noCache);
             $this->setCacheControlHeader($response);
             $this->log->info("Ended in " . round(microtime(true) - $t0, 3) . " s");
             return $response;

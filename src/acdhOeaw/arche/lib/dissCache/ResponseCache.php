@@ -86,16 +86,20 @@ class ResponseCache {
      * 
      * @param string|object|array<mixed> $params
      */
-    public function getResponse(string | object | array $params, string $resId): ResponseCacheItem {
+    public function getResponse(string | object | array $params, string $resId,
+                                bool $noCache = false): ResponseCacheItem {
         $now                   = time();
         $this->lastResponseKey = $this->hashParams($params, $resId);
         $res                   = null;
         $this->log?->info("Checking cache for resource $resId and response key $this->lastResponseKey");
 
-        // first check if the resource exists in cache
-        // this is needed to check the TTL on the resource level
-        $resItem      = $this->cache->get($resId);
         $matchingRepo = false;
+        $resItem      = false;
+        if (!$noCache) {
+            // first check if the resource exists in cache
+            // this is needed to check the TTL on the resource level
+            $resItem = $this->cache->get($resId);
+        }
         if ($resItem !== false) {
             $resCacheCreation = (new DateTimeImmutable($resItem->created))->getTimestamp();
             $diffRes          = $now - $resCacheCreation;
@@ -169,7 +173,7 @@ class ResponseCache {
         // finally generate the response
         $this->log?->info("Generating the response");
         try {
-            $value = ($this->missHandler)($res, $params);
+            $value = ($this->missHandler)($res, $params, $noCache);
             $this->log?->info("Caching the response under a key $this->lastResponseKey");
             $this->cache->set([$this->lastResponseKey], $value->serialize(), null);
         } finally {
