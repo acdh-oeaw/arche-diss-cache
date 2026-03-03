@@ -107,12 +107,12 @@ class ResponseCacheItem {
     }
 
     private function sendCompressed(string $encoding): void {
+        header("Content-Encoding: $encoding");
         $encoding = match ($encoding) {
             'gzip' => ZLIB_ENCODING_GZIP,
             'deflate' => ZLIB_ENCODING_DEFLATE,
             default => throw new \BadMethodCallException('Unsupported encoding'),
         };
-        header("Content-Encoding: $encoding");
         if (!$this->file) {
             echo gzencode($this->body, -1, $encoding);
         } else {
