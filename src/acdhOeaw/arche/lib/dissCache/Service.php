@@ -117,8 +117,8 @@ class Service {
         return $this->log;
     }
 
-    public function setCache(CachePdo $cache): void {
-        $this->cache = $cache;
+    public function setCacheDb(CachePdo $cacheDb): void {
+        $this->cacheDb = $cacheDb;
     }
 
     /**
