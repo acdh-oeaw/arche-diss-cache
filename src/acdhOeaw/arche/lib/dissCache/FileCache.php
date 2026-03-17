@@ -43,6 +43,7 @@ use zozlak\ProxyClient;
  */
 class FileCache {
 
+    const MB            = 1048576;
     const BY_MOD_TIME   = 1;
     const BY_SIZE       = 2;
     const REF_FILE_NAME = 'ref';
@@ -125,7 +126,7 @@ class FileCache {
         // cache access
         $path = $this->dir . '/' . hash('xxh128', $resUrl) . '/ref';
         if (!file_exists($path)) {
-            $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts, (int) ($maxSizeMb * 1048576));
+            $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts, (int) ($maxSizeMb * self::MB));
         }
         return $path;
     }
@@ -171,16 +172,16 @@ class FileCache {
         }
         $body      = $resp->getBody();
         $fout      = fopen($pathTmp, 'w') ?: throw new RuntimeException("Can't open $pathTmp for writing");
-        $chunk     = 1048576; // 1 MB
         $bytesRead = 0;
         while (!$body->eof()) {
-            fwrite($fout, (string) $body->read($chunk));
-            $bytesRead += $chunk;
+            $chunk     = (string) $body->read(self::MB);
+            $bytesRead += strlen($chunk);
             if ($maxSize > 0 && $bytesRead > $maxSize) {
                 fclose($fout);
                 unlink($pathTmp);
                 throw new FileCacheException('Requested file too large', FileCacheException::TOO_LARGE);
             }
+            fwrite($fout, $chunk);
         }
         fclose($fout);
         if (!file_exists($path)) {
