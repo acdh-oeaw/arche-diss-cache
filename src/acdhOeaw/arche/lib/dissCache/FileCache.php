@@ -171,7 +171,7 @@ class FileCache {
         }
         $body      = $resp->getBody();
         $fout      = fopen($pathTmp, 'w') ?: throw new RuntimeException("Can't open $pathTmp for writing");
-        $chunk     = 10 ^ 6; // 1 MB
+        $chunk     = 1048576; // 1 MB
         $bytesRead = 0;
         while (!$body->eof()) {
             fwrite($fout, (string) $body->read($chunk));

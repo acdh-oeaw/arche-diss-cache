@@ -205,6 +205,6 @@ class Service {
             /** @phpstan-ignore property.notFound */
             $this->config->dissCacheService->ttl->resource
         );
-        $response->headers['Cache-Control:'] = "max-age=$ttl, must-revalidate, immutable";
+        $response->headers['Cache-Control'] = "max-age=$ttl, must-revalidate, immutable";
     }
 }
