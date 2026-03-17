@@ -82,7 +82,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $service->setCallback($clbck);
         $param    = ['foo' => 'bar', 'baz' => '3'];
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
-        $headers  = array_merge($param, ['Cache-Control:' => 'max-age=3600, must-revalidate, immutable']);
+        $headers  = array_merge($param, ['Cache-Control' => 'max-age=3600, must-revalidate, immutable']);
         $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
         $this->assertEquals($ref, $response);
 
@@ -104,7 +104,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $service->setCallback($clbck);
         $headersRef = [
             'custom'         => 'header',
-            'Cache-Control:' => 'max-age=3600, must-revalidate, immutable',
+            'Cache-Control' => 'max-age=3600, must-revalidate, immutable',
         ];
         $respRef    = new ResponseCacheItem("foo\n", 456, $headersRef, false);
         $param      = [];
@@ -125,7 +125,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
 
     public function testClearCache(): void {
         $param   = [];
-        $headers = ['Cache-Control:' => 'max-age=3600, must-revalidate, immutable'];
+        $headers = ['Cache-Control' => 'max-age=3600, must-revalidate, immutable'];
         $refResp = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
         $clbck   = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
