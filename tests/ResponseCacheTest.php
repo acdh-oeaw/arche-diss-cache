@@ -103,11 +103,11 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $respCache = $this->getResponseCache($this->missHandler);
         $resUrl    = 'https://arche.acdh.oeaw.ac.at/api/1238';
         $params    = ['foo' => 'bar'];
-        $refResp   = new ResponseCacheItem($resUrl, 302, $params, false);
 
-        $t1    = microtime(true);
-        $resp1 = $respCache->getResponse($params, $resUrl);
-        $t1    = microtime(true) - $t1;
+        $t1      = microtime(true);
+        $resp1   = $respCache->getResponse($params, $resUrl);
+        $t1      = microtime(true) - $t1;
+        $refResp = (new ResponseCacheItem($resUrl, 302, $params, false))->withLastModified($resp1->lastModified);
         $this->assertEquals($refResp, $resp1);
 
         $t2    = microtime(true);
@@ -130,7 +130,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble]);
         $paramsHash = $respCache->hashParams($params, $resUrl);
 
-        $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
+        $refResp = $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
         $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = ";
@@ -154,7 +154,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble], hardTtlRes: 100);
         $paramsHash = $respCache->hashParams($params, $resUrl);
 
-        $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
+        $refResp = $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
         $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -";
@@ -178,7 +178,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $respCache  = $this->getResponseCache($this->missHandler, 0, 0, [$repoDouble], hardTtlRes: 100);
         $paramsHash = $respCache->hashParams($params, $resUrl);
 
-        $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
+        $refResp = $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
         $refLog = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\n";
@@ -200,7 +200,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $respCache  = $this->getResponseCache($this->missHandler, 0, 100, [$repoDouble], hardTtlRes: 0);
         $paramsHash = $respCache->hashParams($params, $resUrl);
 
-        $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
+        $refResp = $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
         $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = -";
@@ -259,10 +259,10 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             file_put_contents($filePath, (string) $count);
             return new ResponseCacheItem($filePath, 302, $params, false, true);
         };
-        $refResp   = new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '1'));
         $respCache = $this->getResponseCache($missHandler);
 
-        $resp = $respCache->getResponse([], $resUrl);
+        $resp    = $respCache->getResponse([], $resUrl);
+        $refResp = (new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '1')))->withLastModified($resp->lastModified);
         $this->assertEquals($refResp, $resp);
         $this->assertEquals('1', file_get_contents($filePath));
 
@@ -271,8 +271,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertEquals('1', file_get_contents($filePath));
 
         unlink($filePath);
-        $refResp = new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '2'));
         $resp    = $respCache->getResponse([], $resUrl);
+        $refResp = (new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '2')))->withLastModified($resp->lastModified);
         $this->assertEquals($refResp, $resp);
         $this->assertEquals('2', file_get_contents($filePath));
 
@@ -294,14 +294,16 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
      */
     private function checkFirstResponse(ResponseCache $respCache, array $params,
                                         string $resUrl,
-                                        ResponseCacheItem $refResp): void {
+                                        ResponseCacheItem $refResp): ResponseCacheItem {
         $paramsHash = $respCache->hashParams($params, $resUrl);
         $refLog     = "Checking cache for resource $resUrl and response key $paramsHash\nFetching the resource\nUpdating response key to 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nCaching the resource\n";
         $resp       = $respCache->getResponse($params, $resUrl);
+        $refResp = $refResp->withLastModified($resp->lastModified);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
+        return $refResp;
     }
 
     /**

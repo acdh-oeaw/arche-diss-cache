@@ -26,6 +26,7 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use DateTime;
 use acdhOeaw\arche\lib\RepoResourceInterface;
 
 /**
@@ -83,16 +84,16 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $param    = ['foo' => 'bar', 'baz' => '3'];
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $headers  = array_merge($param, ['Cache-Control' => 'max-age=3600, must-revalidate, immutable']);
-        $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
+        $ref      = (new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false))->withLastModified($response->lastModified);
         $this->assertEquals($ref, $response);
 
         $response = $service->serveRequest('https://foo/bar', $param);
         $headers  = ['Cache-Control' => 'no-cache'];
-        $ref      = new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, $headers, false);
+        $ref      = (new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, $headers, false))->withLastModified($response->lastModified);
         $this->assertEquals($ref, $response);
 
         $response = $service->serveRequest('', $param);
-        $ref      = new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, $headers, false);
+        $ref      = (new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, $headers, false))->withLastModified($response->lastModified);
         $this->assertEquals($ref, $response);
     }
 
@@ -106,26 +107,25 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
             'custom'        => 'header',
             'Cache-Control' => 'max-age=3600, must-revalidate, immutable',
         ];
-        $respRef    = new ResponseCacheItem("foo\n", 456, $headersRef, false);
         $param      = [];
 
-        $t0    = microtime(true);
-        $resp1 = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
-        $t1    = microtime(true);
-        $resp2 = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
-        $t2    = microtime(true);
+        $t0      = microtime(true);
+        $resp1   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t1      = microtime(true);
+        $resp2   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t2      = microtime(true);
+        $respRef = (new ResponseCacheItem("foo\n", 456, $headersRef, false))->withLastModified($resp1->lastModified);
         $this->assertEquals($respRef, $resp1);
         $this->assertEquals($respRef->withHit(true), $resp2);
         // second one should come from cache and be much faster
-        $t2    -= $t1;
-        $t1    -= $t0;
+        $t2      -= $t1;
+        $t1      -= $t0;
         $this->assertGreaterThan($t2 * 10, $t1);
     }
 
     public function testClearCache(): void {
         $param   = [];
         $headers = ['Cache-Control' => 'max-age=3600, must-revalidate, immutable'];
-        $refResp = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
         $clbck   = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
@@ -139,13 +139,17 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $resp3   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param, true);
         $t3      = microtime(true);
 
-        $t3 -= $t2;
-        $t2 -= $t1;
-        $t1 -= $t0;
+        $t3       -= $t2;
+        $t2       -= $t1;
+        $t1       -= $t0;
+        $refResp  = (new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false))->withLastModified($resp1->lastModified);
         $this->assertEquals($refResp, $resp1);
-        $this->assertEquals($refResp, $resp3);
+        $this->assertEquals($refResp->withLastModified($resp3->lastModified), $resp3);
         $this->assertEquals($refResp->withHit(true), $resp2);
         $this->assertGreaterThan($t2 * 10, $t1);
         $this->assertGreaterThan($t2 * 10, $t3);
+        $lastMod1 = DateTime::createFromFormat(DateTime::RFC1123, $resp1->lastModified);
+        $lastMod3 = DateTime::createFromFormat(DateTime::RFC1123, $resp3->lastModified);
+        $this->assertGreaterThanOrEqual(0, $lastMod3->diff($lastMod1)->s);
     }
 }

@@ -26,7 +26,7 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use RuntimeException;
+use DateTime;
 use zozlak\httpAccept\Accept;
 use zozlak\httpAccept\NoMatchException;
 
@@ -42,12 +42,13 @@ class ResponseCacheItem {
 
     static public function deserialize(string $data): self {
         $data = json_decode($data);
-        $d    = new ResponseCacheItem($data->body, $data->responseCode, (array) $data->headers, true, $data->file, $data->etag);
+        $d    = new ResponseCacheItem($data->body, $data->responseCode, (array) $data->headers, true, $data->file, $data->etag, $data->lastModified);
 #        $d->auth         = $data->auth;
         return $d;
     }
 
     public readonly string $etag;
+    public readonly string $lastModified;
 
     /**
      * 
@@ -57,7 +58,8 @@ class ResponseCacheItem {
                                 readonly int $responseCode = 0,
                                 public array $headers = [],
                                 readonly bool $hit = false,
-                                readonly bool $file = false, string $etag = '') {
+                                readonly bool $file = false, string $etag = '',
+                                string $lastModified = '') {
         if (!empty($etag)) {
             $this->etag = $etag;
         } elseif ($file) {
@@ -65,6 +67,12 @@ class ResponseCacheItem {
         } else {
             $this->etag = hash(self::ETAG_HASH, $body);
         }
+
+        if (empty($lastModified)) {
+            $lastModified = (new DateTime())->format(DateTime::RFC1123);
+        }
+        $this->lastModified = $lastModified;
+
 #        $this->auth         = $auth;
     }
 
@@ -80,6 +88,7 @@ class ResponseCacheItem {
                 header("$header: $i");
             }
         }
+        header('Last-Modified: ' . $this->lastModified);
         header('ETag: "' . $this->etag . '"');
         if ($compress) {
             $encoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? 'identity';
@@ -104,7 +113,15 @@ class ResponseCacheItem {
      * Helper for tests
      */
     public function withHit(bool $hit): self {
-        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag);
+        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag, $this->lastModified);
+        return $ret;
+    }
+
+    /**
+     * Helper for tests
+     */
+    public function withLastModified(string $lastModified): self {
+        $ret = new self($this->body, $this->responseCode, $this->headers, $this->hit, $this->file, $this->etag, $lastModified);
         return $ret;
     }
 
