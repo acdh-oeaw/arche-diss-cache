@@ -103,23 +103,22 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $service    = new Service(__DIR__ . '/config.yaml');
         $service->setCallback($clbck);
         $headersRef = [
-            'custom'         => 'header',
+            'custom'        => 'header',
             'Cache-Control' => 'max-age=3600, must-revalidate, immutable',
         ];
         $respRef    = new ResponseCacheItem("foo\n", 456, $headersRef, false);
         $param      = [];
 
-        $t0           = microtime(true);
-        $resp1        = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
-        $t1           = microtime(true);
-        $resp2        = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
-        $t2           = microtime(true);
+        $t0    = microtime(true);
+        $resp1 = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t1    = microtime(true);
+        $resp2 = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $t2    = microtime(true);
         $this->assertEquals($respRef, $resp1);
-        $respRef->hit = true;
-        $this->assertEquals($respRef, $resp2);
+        $this->assertEquals($respRef->withHit(true), $resp2);
         // second one should come from cache and be much faster
-        $t2           -= $t1;
-        $t1           -= $t0;
+        $t2    -= $t1;
+        $t1    -= $t0;
         $this->assertGreaterThan($t2 * 10, $t1);
     }
 
@@ -140,13 +139,12 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $resp3   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param, true);
         $t3      = microtime(true);
 
-        $t3           -= $t2;
-        $t2           -= $t1;
-        $t1           -= $t0;
+        $t3 -= $t2;
+        $t2 -= $t1;
+        $t1 -= $t0;
         $this->assertEquals($refResp, $resp1);
         $this->assertEquals($refResp, $resp3);
-        $refResp->hit = true;
-        $this->assertEquals($refResp, $resp2);
+        $this->assertEquals($refResp->withHit(true), $resp2);
         $this->assertGreaterThan($t2 * 10, $t1);
         $this->assertGreaterThan($t2 * 10, $t3);
     }

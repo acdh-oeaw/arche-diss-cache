@@ -124,7 +124,7 @@ class FileCache {
         }
 
         // cache access
-        $path = $this->dir . '/' . hash('xxh128', $resUrl) . '/ref';
+        $path = $this->dir . '/' . hash(ResponseCacheItem::ETAG_HASH, $resUrl) . '/ref';
         if (!file_exists($path)) {
             $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts, (int) ($maxSizeMb * self::MB));
         }

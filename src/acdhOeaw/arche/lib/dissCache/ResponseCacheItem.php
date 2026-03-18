@@ -38,41 +38,34 @@ use zozlak\httpAccept\NoMatchException;
 class ResponseCacheItem {
 
     const OUTPUT_CHUNK = 1048576; // 1 MB
+    const ETAG_HASH    = 'xxh128';
 
     static public function deserialize(string $data): self {
-        $data            = json_decode($data);
-        $d               = new ResponseCacheItem();
-        $d->body         = $data->body;
-        $d->responseCode = $data->responseCode;
-        $d->headers      = (array) $data->headers;
-        $d->hit          = true;
-        $d->file         = $data->file;
+        $data = json_decode($data);
+        $d    = new ResponseCacheItem($data->body, $data->responseCode, (array) $data->headers, true, $data->file, $data->etag);
+#        $d->auth         = $data->auth;
         return $d;
     }
 
-    public string $body;
-    public int $responseCode;
-
-    /**
-     * 
-     * @var array<string, string|array<string>>
-     */
-    public array $headers;
-    public bool $hit;
-    public bool $file;
+    public readonly string $etag;
 
     /**
      * 
      * @param array<string, string|array<string>> $headers
      */
-    public function __construct(string $body = '', int $responseCode = 0,
-                                array $headers = [], bool $hit = false,
-                                bool $file = false) {
-        $this->body         = $body;
-        $this->responseCode = $responseCode;
-        $this->headers      = $headers;
-        $this->hit          = $hit;
-        $this->file         = $file;
+    public function __construct(readonly string $body = '',
+                                readonly int $responseCode = 0,
+                                public array $headers = [],
+                                readonly bool $hit = false,
+                                readonly bool $file = false, string $etag = '') {
+        if (!empty($etag)) {
+            $this->etag = $etag;
+        } elseif ($file) {
+            $this->etag = $this->getFileHash();
+        } else {
+            $this->etag = hash(self::ETAG_HASH, $body);
+        }
+#        $this->auth         = $auth;
     }
 
     public function serialize(): string {
@@ -87,6 +80,7 @@ class ResponseCacheItem {
                 header("$header: $i");
             }
         }
+        header('ETag: "' . $this->etag . '"');
         if ($compress) {
             $encoding = $_SERVER['HTTP_ACCEPT_ENCODING'] ?? 'identity';
             $encoding = new Accept($encoding);
@@ -104,6 +98,14 @@ class ResponseCacheItem {
         } else {
             echo $this->body;
         }
+    }
+
+    /**
+     * Helper for tests
+     */
+    public function withHit(bool $hit): self {
+        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag);
+        return $ret;
     }
 
     private function sendCompressed(string $encoding): void {
@@ -131,5 +133,17 @@ class ResponseCacheItem {
             echo deflate_add($encoder, '', ZLIB_FINISH);
             fclose($file);
         }
+    }
+
+    private function getFileHash(): string {
+        $file = fopen($this->body, 'r');
+        if ($file === false) {
+            throw new FileCacheException("Can't open file " . $this->body);
+        }
+        $hash = hash_init(self::ETAG_HASH);
+        while (!feof($file)) {
+            hash_update($hash, (string) fread($file, self::OUTPUT_CHUNK));
+        }
+        return hash_final($hash);
     }
 }

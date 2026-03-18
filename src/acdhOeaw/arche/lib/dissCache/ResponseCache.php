@@ -140,6 +140,7 @@ class ResponseCache {
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
                     $respItem = ResponseCacheItem::deserialize($respItem->value);
                     if (!$respItem->file || file_exists($respItem->body)) {
+#                        $this->checkAuth();
                         $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
                         return $respItem;
                     } else {
@@ -170,6 +171,7 @@ class ResponseCache {
             $this->lastResponseKey = $this->hashParams($params, (string) $resUri);
             $this->log?->debug("Updating response key to $this->lastResponseKey");
         }
+#        $this->checkAuth();
         // finally generate the response
         $this->log?->info("Generating the response");
         try {

@@ -110,11 +110,10 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $t1    = microtime(true) - $t1;
         $this->assertEquals($refResp, $resp1);
 
-        $t2           = microtime(true);
-        $resp2        = $respCache->getResponse($params, $resUrl);
-        $refResp->hit = true;
-        $this->assertEquals($refResp, $resp2);
-        $t2           = microtime(true) - $t2;
+        $t2    = microtime(true);
+        $resp2 = $respCache->getResponse($params, $resUrl);
+        $this->assertEquals($refResp->withHit(true), $resp2);
+        $t2    = microtime(true) - $t2;
 
         // second one should come from cache and be much faster
         $this->assertGreaterThan($t2 * 10, $t1);
@@ -158,13 +157,12 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog1      = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -";
-        $refLog2      = "\nServing response from cache (respDiff 0, respTtl 100)\n";
-        $resp         = $respCache->getResponse($params, $resUrl);
+        $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -";
+        $refLog2 = "\nServing response from cache (respDiff 0, respTtl 100)\n";
+        $resp    = $respCache->getResponse($params, $resUrl);
         $this->assertStringStartsWith($refLog1, file_get_contents(self::$logPath));
         $this->assertStringEndsWith($refLog2, file_get_contents(self::$logPath));
-        $refResp->hit = true;
-        $this->assertEquals($refResp, $resp);
+        $this->assertEquals($refResp->withHit(true), $resp);
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
     }
@@ -205,13 +203,12 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog1      = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = -";
-        $refLog2      = "/Invalidating resource's cache [(]resLastMod - resCacheCreation = -[0-9]+, diffRes [0-9]+, resHardTtl 0[)]/m";
-        $resp         = $respCache->getResponse($params, $resUrl);
+        $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = -";
+        $refLog2 = "/Invalidating resource's cache [(]resLastMod - resCacheCreation = -[0-9]+, diffRes [0-9]+, resHardTtl 0[)]/m";
+        $resp    = $respCache->getResponse($params, $resUrl);
         $this->assertStringStartsWith($refLog1, file_get_contents(self::$logPath));
         $this->assertMatchesRegularExpression($refLog2, file_get_contents(self::$logPath));
-        $refResp->hit = false;
-        $this->assertEquals($refResp, $resp);
+        $this->assertEquals($refResp->withHit(false), $resp);
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($paramsHash));
     }
@@ -262,21 +259,20 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             file_put_contents($filePath, (string) $count);
             return new ResponseCacheItem($filePath, 302, $params, false, true);
         };
-        $refResp   = new ResponseCacheItem($filePath, 302, [], false, true);
+        $refResp   = new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '1'));
         $respCache = $this->getResponseCache($missHandler);
 
         $resp = $respCache->getResponse([], $resUrl);
         $this->assertEquals($refResp, $resp);
         $this->assertEquals('1', file_get_contents($filePath));
 
-        $refResp->hit = true;
-        $resp         = $respCache->getResponse([], $resUrl);
-        $this->assertEquals($refResp, $resp);
+        $resp = $respCache->getResponse([], $resUrl);
+        $this->assertEquals($refResp->withHit(true), $resp);
         $this->assertEquals('1', file_get_contents($filePath));
 
         unlink($filePath);
-        $refResp->hit = false;
-        $resp         = $respCache->getResponse([], $resUrl);
+        $refResp = new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '2'));
+        $resp    = $respCache->getResponse([], $resUrl);
         $this->assertEquals($refResp, $resp);
         $this->assertEquals('2', file_get_contents($filePath));
 
