@@ -37,13 +37,13 @@ use zozlak\httpAccept\NoMatchException;
  */
 class ResponseCacheItem {
 
-    const OUTPUT_CHUNK = 1048576; // 1 MB
-    const ETAG_HASH    = 'xxh128';
+    const OUTPUT_CHUNK   = 1048576; // 1 MB
+    const ETAG_HASH      = 'xxh128';
+    const NO_COMPRESSION = 'image/*, audio/*, video/*, application/zip, application/gzip, application/x-bzip2, application/x-bzip, application/x-lzma';
 
     static public function deserialize(string $data): self {
         $data = json_decode($data);
         $d    = new ResponseCacheItem($data->body, $data->responseCode, (array) $data->headers, true, $data->file, $data->etag, $data->lastModified);
-#        $d->auth         = $data->auth;
         return $d;
     }
 
@@ -72,15 +72,15 @@ class ResponseCacheItem {
             $lastModified = (new DateTime())->format(DateTime::RFC1123);
         }
         $this->lastModified = $lastModified;
-
-#        $this->auth         = $auth;
     }
 
     public function serialize(): string {
         return (string) json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    public function send(bool $compress = true): void {
+    public function send(?bool $compress = null): void {
+        $compress ??= $this->getCompressFromContentTypeHeader();
+
         http_response_code($this->responseCode);
         foreach ($this->headers as $header => $values) {
             $values = is_array($values) ? $values : [$values];
@@ -162,5 +162,27 @@ class ResponseCacheItem {
             hash_update($hash, (string) fread($file, self::OUTPUT_CHUNK));
         }
         return hash_final($hash);
+    }
+
+    /**
+     * Automatically detects if it makes sense to compress the output
+     * based on the response format provided in the conte-type response header.
+     */
+    private function getCompressFromContentTypeHeader(): bool {
+        foreach ($this->headers as $k => $v) {
+            if (strtolower($k) == 'content-type') {
+                if (!is_string($v)) {
+                    throw new ServiceException("Multiple Content-Type response headers", 500);
+                }
+                $noCompression = new Accept(self::NO_COMPRESSION);
+                try {
+                    $noCompression->getBestMatch([$v]);
+                    return false;
+                } catch (NoMatchException) {
+                    return true;
+                }
+            }
+        }
+        return true;
     }
 }

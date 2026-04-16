@@ -39,7 +39,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     public function setUp(): void {
         parent::setUp();
 
-        foreach (array_merge(glob('/tmp/__log__'), glob('/tmp/cachePdo*')) as $i) {
+        foreach (array_merge(glob('/tmp/__log__') ?: [], glob('/tmp/cachePdo*') ?: []) as $i) {
             unlink($i);
         }
 
@@ -78,7 +78,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $service = new Service(__DIR__ . '/config.yaml');
 
         $this->assertInstanceOf(\zozlak\logging\Log::class, $service->getLog());
-        $this->assertEquals(json_decode(json_encode(yaml_parse_file(__DIR__ . '/config.yaml'))), $service->getConfig());
+        $this->assertEquals(json_decode((string) json_encode(yaml_parse_file(__DIR__ . '/config.yaml'))), $service->getConfig());
 
         $service->setCallback($clbck);
         $param    = ['foo' => 'bar', 'baz' => '3'];
@@ -150,6 +150,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $this->assertGreaterThan($t2 * 10, $t3);
         $lastMod1 = DateTime::createFromFormat(DateTime::RFC1123, $resp1->lastModified);
         $lastMod3 = DateTime::createFromFormat(DateTime::RFC1123, $resp3->lastModified);
+        $this->assertNotFalse($lastMod1);
+        $this->assertNotFalse($lastMod3);
         $this->assertGreaterThanOrEqual(0, $lastMod3->diff($lastMod1)->s);
     }
 }

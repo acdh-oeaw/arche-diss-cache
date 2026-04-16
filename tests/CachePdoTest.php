@@ -37,7 +37,7 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
 
     public function setUp(): void {
         parent::setUp();
-        foreach (glob(sys_get_temp_dir() . '/cachePdo_*') as $i) {
+        foreach (glob(sys_get_temp_dir() . '/cachePdo_*') ?: [] as $i) {
             unlink($i);
         }
     }

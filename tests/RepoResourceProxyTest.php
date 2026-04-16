@@ -73,6 +73,6 @@ class RepoResourceProxyTest extends \PHPUnit\Framework\TestCase {
         $resDes     = RepoResourceCacheItem::deserialize($cacheValue);
         $metaDes    = $resDes->getGraph();
         $this->assertTrue($resOrig->getUri()->equals($resDes->getUri()));
-        $this->assertTrue($metaOrig->getGraph()->equals($metaDes->getGraph()));
+        $this->assertTrue($metaOrig->equals($metaDes));
     }
 }

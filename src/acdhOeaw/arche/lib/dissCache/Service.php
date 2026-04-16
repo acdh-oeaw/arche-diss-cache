@@ -27,7 +27,6 @@
 namespace acdhOeaw\arche\lib\dissCache;
 
 use zozlak\logging\Log;
-use acdhOeaw\arche\lib\RepoDb;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\RepoResourceInterface;
 use acdhOeaw\arche\lib\exception\NotFound;
@@ -153,7 +152,7 @@ class Service {
 
             $repos = [];
             foreach ($cfg->repoDb ?? [] as $i) {
-                $repos[] = new RepoWrapperRepoInterface(RepoDb::factory($i), true);
+                $repos[] = new RepoWrapperRepoInterface($i, true);
             }
             $repos[] = new RepoWrapperGuzzle(false);
 

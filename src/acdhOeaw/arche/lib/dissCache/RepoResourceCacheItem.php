@@ -92,4 +92,5 @@ class RepoResourceCacheItem implements RepoResourceInterface {
         }
         return $this->repoInt;
     }
+    
 }

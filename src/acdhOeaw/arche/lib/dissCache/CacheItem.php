@@ -26,13 +26,27 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use DateTimeImmutable;
+
 /**
  * Description of CacheItem
  *
  * @author zozlak
  */
 class CacheItem {
+
     public int $id;
     public string $created;
     public string $value;
+
+    /**
+     * Returns cache item's age in seconds
+     */
+    public function getAge(): int {
+        return $this->getCreatedTimestamp() - time();
+    }
+
+    public function getCreatedTimestamp(): int {
+        return (new DateTimeImmutable($this->created))->getTimestamp();
+    }
 }
