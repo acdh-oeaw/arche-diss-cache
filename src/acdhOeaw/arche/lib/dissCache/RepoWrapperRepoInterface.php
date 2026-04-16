@@ -28,6 +28,7 @@ namespace acdhOeaw\arche\lib\dissCache;
 
 use DateTimeImmutable;
 use termTemplates\PredicateTemplate as PT;
+use acdhOeaw\arche\lib\RepoDb;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\RepoInterface;
 use acdhOeaw\arche\lib\RepoResourceInterface;
@@ -39,16 +40,22 @@ use acdhOeaw\arche\lib\RepoResourceInterface;
  */
 class RepoWrapperRepoInterface implements RepoWrapperInterface {
 
+    private string $configPath;
     private RepoInterface $repo;
     private bool $checkModDate;
 
-    public function __construct(RepoInterface $repo,
+    public function __construct(RepoInterface | string $repoOrConfigPath,
                                 bool $checkModificationDate = false) {
-        $this->repo         = $repo;
+        if (is_string($repoOrConfigPath)) {
+            $this->configPath = $repoOrConfigPath;
+        } else {
+            $this->repo = $repoOrConfigPath;
+        }
         $this->checkModDate = $checkModificationDate;
     }
 
     public function getResourceById(string $id, ?SearchConfig $config = null): RepoResourceInterface {
+        $this->assureRepo();
         return $this->repo->getResourceById($id, $config);
     }
 
@@ -57,6 +64,7 @@ class RepoWrapperRepoInterface implements RepoWrapperInterface {
             return PHP_INT_MAX;
         }
 
+        $this->assureRepo();
         $config                     = new SearchConfig();
         $config->metadataMode       = RepoResourceInterface::META_RESOURCE;
         $modDateProp                = $this->repo->getSchema()->modificationDate;
@@ -64,5 +72,11 @@ class RepoWrapperRepoInterface implements RepoWrapperInterface {
         $res                        = $this->repo->getResourceById($id, $config);
         $modDate                    = $res->getGraph()->getObjectValue(new PT($modDateProp));
         return (new DateTimeImmutable($modDate))->getTimestamp();
+    }
+
+    private function assureRepo(): void {
+        if (!isset($this->repo)) {
+            $this->repo = RepoDb::factory($this->configPath);
+        }
     }
 }
