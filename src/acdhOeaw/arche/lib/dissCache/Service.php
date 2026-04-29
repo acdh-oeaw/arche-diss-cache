@@ -163,6 +163,7 @@ class Service {
             $sc->relativesProperties    = $cfg->relativesProperties ?? [];
 
             $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null);
+            unset($repos);
 
             $response = $cache->getResponse($param, $id, $noCache);
             $this->setCacheControlHeader($response);
