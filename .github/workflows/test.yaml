@@ -13,11 +13,9 @@ jobs:
       with:
         php-version: ${{ matrix.php }}
     - name: composer
-      run: |
-        composer update
+      run: composer update
     - name: phpstan
-      run: |
-        vendor/bin/phpstan analyze -l 8 src tests bin/*
+      run: vendor/bin/phpstan analyze -l 8 src tests bin/*
     - name: phpunit
       run: |
         mkdir -p build/logs
