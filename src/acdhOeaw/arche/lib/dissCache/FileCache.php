@@ -154,13 +154,13 @@ class FileCache {
         $guzzleOpts['http_errors'] = false;
         $client                    = ProxyClient::factory($guzzleOpts);
         if ($maxSize > 0) {
-            $resp = $client->send(new Request('head', $resUrl));
+            $resp = $client->send(new Request('HEAD', $resUrl));
             $size = (int) ($resp->getHeader('Content-Length')[0] ?? 0);
             if ($size > $maxSize) {
                 throw new FileCacheException('Requested file too large', FileCacheException::TOO_LARGE);
             }
         }
-        $resp = $client->send(new Request('get', $resUrl));
+        $resp = $client->send(new Request('GET', $resUrl));
         if ($resp->getStatusCode() !== 200) {
             throw new FileCacheException('No such file', FileCacheException::NO_FILE);
         }

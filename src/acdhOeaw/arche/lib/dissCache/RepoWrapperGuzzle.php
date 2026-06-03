@@ -97,7 +97,7 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
     }
 
     private function resolve(string $id): string {
-        $resp = $this->client->send(new Request('head', $id));
+        $resp = $this->client->send(new Request('HEAD', $id));
         $code = $resp->getStatusCode();
         if ($code === 401) {
             throw new UnauthorizedException();
