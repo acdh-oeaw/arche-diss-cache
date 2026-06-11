@@ -26,10 +26,8 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
 use GuzzleHttp\Psr7\Request;
-use zozlak\ProxyClient;
 use termTemplates\PredicateTemplate as PT;
 use acdhOeaw\arche\lib\exception\NotFound;
 use acdhOeaw\arche\lib\SearchConfig;
@@ -257,10 +255,9 @@ class ResponseCache {
     }
 
     /**
-     * 
      * @return array<string>
      */
-    private function getClientRoles(string $repoBaseUrl): array {
+    public function getClientRoles(string $repoBaseUrl): array {
         $authCfg = $this->authConfig;
         if ($authCfg === null) {
             return [];
@@ -268,39 +265,35 @@ class ResponseCache {
 
         $roles = [];
 
-        if (!empty($authCfg->roleTrustedHeader)) {
-            $role = $_SERVER['HTTP_' . $authCfg->roleTrustedHeader] ?? '';
-            if (!empty($role)) {
-                $roles[] = $role;
-                $roles[] = $authCfg->academicRole;
-            }
+        $trustedHeaderRole = $this->authConfig->getTrustedHeaderRole();
+        if (!empty($trustedHeaderRole)) {
+            $roles[] = $trustedHeaderRole;
+            $roles[] = $authCfg->academicRole;
         }
 
-        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['AUTHORIZATION'] ?? '');
-        if (strtolower(substr($authHeader, 0, 6)) === 'basic ') {
-            $userPswd = base64_decode(trim(substr($authHeader, 6)));
-            list($user, $pswd) = explode(':', $userPswd . ':');
-            $authUrl  = $repoBaseUrl . 'user/' . $user;
+        list($user, $pswd) = $this->authConfig->getUserPswd();
+        if (!empty($user) && !empty($pswd)) {
+            $authUrl = $repoBaseUrl . 'user/' . $user;
             // $authUrl as a key because it must combine ARCHE instance and user name
-            $data     = $this->cache->get($authUrl);
-            $failed   = true;
+            $data    = $this->cache->get($authUrl);
+            $failed  = true;
 
             if ($data && $data->getAge() <= $authCfg->authTtl) {
                 $data = json_decode($data->value);
-                if (password_verify($userPswd, $data->hash)) {
+                if (password_verify("$user:$pswd", $data->hash)) {
                     $roles  = array_merge($roles, $data->roles);
                     $failed = false;
                 }
             }
             if ($failed) {
-                $client = ProxyClient::factory(['auth' => [$user, $pswd], 'http_errors' => false]);
+                $client = $this->authConfig->getClient([$user, $pswd]);
                 $resp   = $client->send(new Request('GET', $authUrl));
                 if ($resp->getStatusCode() === 200) {
                     $userRoles = json_decode((string) $resp->getBody())->groups;
                     $roles     = array_merge($roles, $userRoles);
 
                     $data = [
-                        'hash'  => password_hash($userPswd, PASSWORD_BCRYPT, ['cost' => $authCfg->passwordCost]),
+                        'hash'  => password_hash("$user:$pswd", PASSWORD_BCRYPT, ['cost' => $authCfg->passwordCost]),
                         'roles' => $userRoles,
                     ];
                     $this->cache->set([$authUrl], (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), null);

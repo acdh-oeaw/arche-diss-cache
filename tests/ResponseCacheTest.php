@@ -80,12 +80,11 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->missHandler = function (RepoResourceInterface $x, array $params): ResponseCacheItem {
             return new ResponseCacheItem((string) $x->getUri(), 302, $params, false);
         };
-        $this->setTrustedHeader('');
     }
 
     public function tearDown(): void {
-        unset($_SERVER['HTTTP_' . self::ACL_TRUSTED_HEADER]);
-        unset($_SERVER['HTTTP_AUTHORIZATION']);
+        unset($_SERVER['HTTP_' . self::ACL_TRUSTED_HEADER]);
+        unset($_SERVER['HTTP_AUTHORIZATION']);
     }
 
     public function testHashParams(): void {
@@ -121,8 +120,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $t1      = microtime(true);
         $resp1   = $respCache->getResponse($params, $resUrl);
         $t1      = microtime(true) - $t1;
-        $refResp = (new ResponseCacheItem($resUrl, 302, $params, false))->withLastModified($resp1->lastModified);
-        $this->assertEquals($refResp, $resp1);
+        $refResp = (new ResponseCacheItem($resUrl, 302, $params, false));
+        $this->assertEquals($refResp->unify($resp1), $resp1);
 
         $t2    = microtime(true);
         $resp2 = $respCache->getResponse($params, $resUrl);
@@ -276,8 +275,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $respCache = $this->getResponseCache($missHandler);
 
         $resp    = $respCache->getResponse([], $resUrl);
-        $refResp = (new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '1')))->withLastModified($resp->lastModified);
-        $this->assertEquals($refResp, $resp);
+        $refResp = (new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '1')));
+        $this->assertEquals($refResp->unify($resp), $resp);
         $this->assertEquals('1', file_get_contents($filePath));
 
         $resp = $respCache->getResponse([], $resUrl);
@@ -286,8 +285,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
 
         unlink($filePath);
         $resp    = $respCache->getResponse([], $resUrl);
-        $refResp = (new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '2')))->withLastModified($resp->lastModified);
-        $this->assertEquals($refResp, $resp);
+        $refResp = (new ResponseCacheItem($filePath, 302, [], false, true, hash(ResponseCacheItem::ETAG_HASH, '2')));
+        $this->assertEquals($refResp->unify($resp), $resp);
         $this->assertEquals('2', file_get_contents($filePath));
 
         unlink($filePath);
@@ -308,7 +307,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         // public
         $respCache = $this->getAclResponseCache(self::ROLE_PUBLIC);
         $resp      = $respCache->getResponse([], self::ACL_RES_URL);
-        $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
+        $this->assertEquals($refResp->unify($resp), $resp);
 
         // academic
         $respCache = $this->getAclResponseCache(self::ROLE_ACADEMIC);
@@ -322,7 +321,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         }
         $this->setTrustedHeader('someAcademicFolk');
         $resp = $respCache->getResponse([], self::ACL_RES_URL);
-        $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
+        $this->assertEquals($refResp->unify($resp), $resp);
 
         // restricted
         $respCache = $this->getAclResponseCache(self::ROLE_RESTRICTED);
@@ -336,7 +335,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         }
         $this->setTrustedHeader(self::ROLE_RESTRICTED);
         $resp = $respCache->getResponse([], self::ACL_RES_URL);
-        $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
+        $this->assertEquals($refResp->unify($resp), $resp);
     }
 
     public function testAuthReal(): void {
@@ -345,11 +344,13 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $resUrl  = 'https://arche.acdh.oeaw.ac.at/api/585588'; // sample title image
         $refResp = (new ResponseCacheItem($resUrl, 302, [], false));
         $resp    = $respCache->getResponse([], $resUrl);
-        $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
+        $this->assertEquals($refResp->unify($resp), $resp);
 
         $resUrl  = 'https://id.acdh.oeaw.ac.at/MadraRiverDelta/Photos/10YT-96-33b.tif'; // https://arche.acdh.oeaw.ac.at/api/66635 - academic
         $realUrl = 'https://arche.acdh.oeaw.ac.at/api/66635';
         $refResp = (new ResponseCacheItem($realUrl, 302, [], false));
+
+        // no auth - exception
         try {
             $resp = $respCache->getResponse([], $resUrl);
             /* @phpstan-ignore method.impossibleType */
@@ -359,6 +360,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             $this->assertTrue(true);
         }
 
+        // with auth - pass
         $this->setTrustedHeader('trustedRole');
         $t1    = microtime(true);
         $resp1 = $respCache->getResponse([], $resUrl);
@@ -366,13 +368,32 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $t2    = microtime(true);
         $resp2 = $respCache->getResponse([], $resUrl);
         $t2    = microtime(true) - $t2;
-        $this->assertEquals($refResp->withLastModified($resp1->lastModified), $resp1);
-        $this->assertEquals($refResp->withLastModified($resp1->lastModified)->withHit(true), $resp2);
+        $this->assertEquals($refResp->unify($resp1), $resp1);
+        $this->assertEquals($refResp->unify($resp2)->withHit(true), $resp2);
         $this->assertLessThan($t1 / 2, $t2);
-
-        //TODO test caching
+        // different used doesn't affect response caching
+        $this->setTrustedHeader('anotherRole');
+        $t3    = microtime(true);
+        $resp3 = $respCache->getResponse([], $resUrl);
+        $t3    = microtime(true) - $t3;
+        $this->assertEquals($refResp->unify($resp3)->withHit(true), $resp3);
+        $this->assertLessThan($t1 / 2, $t3);
+        // no authentication fails no matter we cached reponse for authenticated user
+        $this->setTrustedHeader('');
+        try {
+            $resp = $respCache->getResponse([], $resUrl);
+            /* @phpstan-ignore method.impossibleType */
+            $this->assertTrue(false);
+        } catch (UnauthorizedException) {
+            /* @phpstan-ignore method.alreadyNarrowedType */
+            $this->assertTrue(true);
+        }
     }
 
+    public function testGetClientRoles(): void {
+        //TODO
+    }
+    
     /**
      * 
      * @param array<mixed> $params
@@ -383,7 +404,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $paramsHash = $respCache->hashParams($params, $resUrl);
         $refLog     = "Checking cache for resource $resUrl and response key $paramsHash\nFetching the resource\nUpdating response key to 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nCaching the resource\n";
         $resp       = $respCache->getResponse($params, $resUrl);
-        $refResp    = $refResp->withLastModified($resp->lastModified);
+        $refResp    = $refResp->unify($resp);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);
         $this->assertInstanceOf(CacheItem::class, $this->cache->get($resUrl));

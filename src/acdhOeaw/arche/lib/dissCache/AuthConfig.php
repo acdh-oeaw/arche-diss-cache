@@ -26,8 +26,13 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use GuzzleHttp\Client;
+use zozlak\ProxyClient;
+
 /**
  * Container for authorization config.
+ * 
+ * getUserPswd(), getTrustedHeaderRole() and getClient() methods allow easy test doubles generation
  *
  * @author zozlak
  */
@@ -41,5 +46,31 @@ class AuthConfig {
                                 readonly int $authTtl = 60,
                                 readonly int $passwordCost = 10) {
         ;
+    }
+
+    /**
+     * 
+     * @return array{0: string, 1: string}
+     */
+    public function getUserPswd(): array {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['AUTHORIZATION'] ?? '');
+        if (strtolower(substr($authHeader, 0, 6)) === 'basic ') {
+            $userPswd = base64_decode(trim(substr($authHeader, 6)));
+            list($user, $pswd) = explode(':', $userPswd . ':');
+            return [$user, $pswd];
+        }
+        return ['', ''];
+    }
+
+    public function getTrustedHeaderRole(): string {
+        return $_SERVER['HTTP_' . $this->roleTrustedHeader] ?? '';
+    }
+
+    /**
+     * 
+     * @param array{0: string, 1:string} $auth
+     */
+    public function getClient(array $auth): Client {
+        return ProxyClient::factory(['auth' => $auth, 'http_errors' => false]);
     }
 }
