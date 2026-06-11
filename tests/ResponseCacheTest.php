@@ -27,13 +27,11 @@
 namespace acdhOeaw\arche\lib\dissCache;
 
 use quickRdf\DataFactory as DF;
-use quickRdf\Dataset;
 use quickRdf\DatasetNode;
 use acdhOeaw\arche\lib\SearchConfig;
 use acdhOeaw\arche\lib\Repo;
 use acdhOeaw\arche\lib\RepoResourceInterface;
 use acdhOeaw\arche\lib\exception\NotFound;
-use acdhOeaw\arche\lib\dissCache\RepoWrapperInterface;
 use zozlak\logging\Log;
 
 /**
@@ -82,6 +80,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->missHandler = function (RepoResourceInterface $x, array $params): ResponseCacheItem {
             return new ResponseCacheItem((string) $x->getUri(), 302, $params, false);
         };
+        $this->setTrustedHeader('');
     }
 
     public function tearDown(): void {
@@ -305,7 +304,6 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
 
     public function testAuthSimple(): void {
         $refResp = (new ResponseCacheItem(self::ACL_RES_URL, 302, [], false));
-        $header  = 'HTTP_' . self::ACL_TRUSTED_HEADER;
 
         // public
         $respCache = $this->getAclResponseCache(self::ROLE_PUBLIC);
@@ -322,8 +320,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
-        $_SERVER[$header] = 'someAcademicFolk';
-        $resp             = $respCache->getResponse([], self::ACL_RES_URL);
+        $this->setTrustedHeader('someAcademicFolk');
+        $resp = $respCache->getResponse([], self::ACL_RES_URL);
         $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
 
         // restricted
@@ -336,8 +334,8 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
-        $_SERVER[$header] = self::ROLE_RESTRICTED;
-        $resp             = $respCache->getResponse([], self::ACL_RES_URL);
+        $this->setTrustedHeader(self::ROLE_RESTRICTED);
+        $resp = $respCache->getResponse([], self::ACL_RES_URL);
         $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
     }
 
@@ -349,7 +347,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $resp    = $respCache->getResponse([], $resUrl);
         $this->assertEquals($refResp->withLastModified($resp->lastModified), $resp);
 
-        $resUrl  = 'https://id.acdh.oeaw.ac.at/MadraRiverDelta/Photos/10YT-96-33b.tif'; // https://arche.acdh.oeaw.ac.at/api/66635
+        $resUrl  = 'https://id.acdh.oeaw.ac.at/MadraRiverDelta/Photos/10YT-96-33b.tif'; // https://arche.acdh.oeaw.ac.at/api/66635 - academic
         $realUrl = 'https://arche.acdh.oeaw.ac.at/api/66635';
         $refResp = (new ResponseCacheItem($realUrl, 302, [], false));
         try {
@@ -361,8 +359,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             $this->assertTrue(true);
         }
 
-        $_SERVER['HTTP_AUTHORIZATION'] = 'basic ' . base64_encode('');
-
+        $this->setTrustedHeader('trustedRole');
         $t1    = microtime(true);
         $resp1 = $respCache->getResponse([], $resUrl);
         $t1    = microtime(true) - $t1;
@@ -436,5 +433,14 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
 
     private function getAuthCfg(): AuthConfig {
         return new AuthConfig(self::ACL_READ_PROPERTY, self::ROLE_PUBLIC, self::ROLE_ACADEMIC, self::ACL_TRUSTED_HEADER, self::ROLE_ADMIN);
+    }
+
+    private function setTrustedHeader(string $value): void {
+        $header = 'HTTP_' . self::ACL_TRUSTED_HEADER;
+        if (empty($value)) {
+            unset($_SERVER[$header]);
+        } else {
+            $_SERVER[$header] = $value;
+        }
     }
 }

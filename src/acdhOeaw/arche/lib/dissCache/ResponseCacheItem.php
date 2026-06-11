@@ -147,6 +147,23 @@ class ResponseCacheItem {
     }
 
     /**
+     * Testing helper
+     */
+    public function unify(self $resp): self {
+        return new self(
+            $this->body,
+            $this->responseCode,
+            $this->headers,
+            $this->hit,
+            $this->file,
+            $this->etag,
+            $resp->lastModified,
+            $resp->responseTimestamp,
+            $resp->resourceTimestamp
+        );
+    }
+
+    /**
      * Helper for tests
      */
     public function withLastModified(string $lastModified): self {

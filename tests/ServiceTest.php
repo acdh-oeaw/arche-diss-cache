@@ -89,16 +89,16 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $headers  = array_merge($param, ['Cache-Control' => 'max-age=3600, must-revalidate, immutable']);
         $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
-        $this->assertEquals($this->unify($ref, $response), $response);
+        $this->assertEquals($ref->unify($response), $response);
 
         $response = $service->serveRequest('https://foo/bar', $param);
         $headers  = ['Cache-Control' => 'no-cache'];
         $ref      = new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, $headers, false);
-        $this->assertEquals($this->unify($ref, $response), $response);
+        $this->assertEquals($ref->unify($response), $response);
 
         $response = $service->serveRequest('', $param);
         $ref      = new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, $headers, false);
-        $this->assertEquals($this->unify($ref, $response), $response);
+        $this->assertEquals($ref->unify($response), $response);
     }
 
     public function testCacheError(): void {
@@ -119,8 +119,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $resp2   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $t2      = microtime(true);
         $respRef = new ResponseCacheItem("foo\n", 456, $headersRef, false);
-        $this->assertEquals($this->unify($respRef, $resp1), $resp1);
-        $this->assertEquals($this->unify($respRef->withHit(true), $resp2), $resp2);
+        $this->assertEquals($respRef->unify($resp1), $resp1);
+        $this->assertEquals($respRef->withHit(true)->unify($resp2), $resp2);
         // second one should come from cache and be much faster
         $t2      -= $t1;
         $t1      -= $t0;
@@ -147,9 +147,9 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $t2       -= $t1;
         $t1       -= $t0;
         $refResp  = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
-        $this->assertEquals($this->unify($refResp, $resp1), $resp1);
-        $this->assertEquals($this->unify($refResp, $resp3), $resp3);
-        $this->assertEquals($this->unify($refResp->withHit(true), $resp2), $resp2);
+        $this->assertEquals($refResp->unify($resp1), $resp1);
+        $this->assertEquals($refResp->unify($resp3), $resp3);
+        $this->assertEquals($refResp->withHit(true)->unify($resp2), $resp2);
         $this->assertGreaterThan($t2 * 10, $t1);
         $this->assertGreaterThan($t2 * 10, $t3);
         $lastMod1 = DateTime::createFromFormat(DateTime::RFC1123, $resp1->lastModified);
@@ -175,19 +175,5 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         sleep(1);
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $this->assertEquals($refTtl - 1, $response->getTtl($config->resource, $config->response));
-    }
-
-    private function unify(ResponseCacheItem $ref, ResponseCacheItem $resp): ResponseCacheItem {
-        return new ResponseCacheItem(
-            $ref->body,
-            $ref->responseCode,
-            $ref->headers,
-            $ref->hit,
-            $ref->file,
-            $ref->etag,
-            $resp->lastModified,
-            $resp->responseTimestamp,
-            $resp->resourceTimestamp
-        );
     }
 }
