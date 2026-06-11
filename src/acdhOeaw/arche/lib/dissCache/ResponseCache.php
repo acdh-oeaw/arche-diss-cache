@@ -135,7 +135,7 @@ class ResponseCache {
             }
             if ($resItem !== false) {
                 // regenerate the response key using the canonical resource URI
-                $res    = RepoResourceCacheItem::deserialize($resItem->value);
+                $res    = RepoResourceCacheItem::deserialize($resItem->value, $resItem->created);
                 $resUri = (string) $res->getUri();
                 if ($resUri !== $resId) {
                     $this->lastResponseKey = $this->hashParams($params, (string) $resUri);
@@ -147,7 +147,7 @@ class ResponseCache {
                 $respItem = $this->cache->get($this->lastResponseKey);
                 $respDiff = $respItem !== false ? $respItem->getAge() : 'not in cache';
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
-                    $respItem = ResponseCacheItem::deserialize($respItem->value);
+                    $respItem = ResponseCacheItem::deserialize($respItem->value, $respItem->created, $res->cacheTimestamp);
                     if (!$respItem->file || file_exists($respItem->body)) {
                         $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
                         return $respItem;

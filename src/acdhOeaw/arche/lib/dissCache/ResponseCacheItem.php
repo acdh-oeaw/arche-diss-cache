@@ -26,7 +26,8 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use DateTime;
+use DateTimeImmutable;
+use BadMethodCallException;
 use zozlak\httpAccept\Accept;
 use zozlak\httpAccept\NoMatchException;
 
@@ -41,14 +42,29 @@ class ResponseCacheItem {
     const ETAG_HASH      = 'xxh128';
     const NO_COMPRESSION = 'image/*, audio/*, video/*, application/zip, application/gzip, application/x-bzip2, application/x-bzip, application/x-lzma';
 
-    static public function deserialize(string $data): self {
-        $data = json_decode($data);
-        $d    = new ResponseCacheItem($data->body, $data->responseCode, (array) $data->headers, true, $data->file, $data->etag, $data->lastModified);
+    static public function deserialize(string $data, string $createdDate,
+                                       int $resourceTimestamp): self {
+        $data            = json_decode($data);
+        $cachedDate      = DateTimeImmutable::createFromFormat("Y-m-d H:i:s", $createdDate) ?: throw new BadMethodCallException("$createdDate is not a data in Y-m-d H:i:s format");
+        $cachedTimestamp = $cachedDate->getTimestamp();
+        $d               = new ResponseCacheItem(
+            $data->body,
+            $data->responseCode,
+            (array) $data->headers,
+            true,
+            $data->file,
+            $data->etag,
+            $data->lastModified,
+            $cachedTimestamp,
+            $resourceTimestamp
+        );
         return $d;
     }
 
     public readonly string $etag;
     public readonly string $lastModified;
+    public readonly int $responseTimestamp;
+    public readonly int $resourceTimestamp;
 
     /**
      * 
@@ -59,7 +75,9 @@ class ResponseCacheItem {
                                 public array $headers = [],
                                 readonly bool $hit = false,
                                 readonly bool $file = false, string $etag = '',
-                                string $lastModified = '') {
+                                string $lastModified = '',
+                                int | null $responseTimestamp = null,
+                                int | null $resourceTimestamp = null) {
         if (!empty($etag)) {
             $this->etag = $etag;
         } elseif ($file) {
@@ -68,10 +86,13 @@ class ResponseCacheItem {
             $this->etag = hash(self::ETAG_HASH, $body);
         }
 
+        $now = new DateTimeImmutable();
         if (empty($lastModified)) {
-            $lastModified = (new DateTime())->format(DateTime::RFC1123);
+            $lastModified = $now->format(DateTimeImmutable::RFC1123);
         }
-        $this->lastModified = $lastModified;
+        $this->lastModified      = $lastModified;
+        $this->responseTimestamp = $responseTimestamp ?? $now->getTimestamp();
+        $this->resourceTimestamp = $resourceTimestamp ?? $now->getTimestamp();
     }
 
     public function serialize(): string {
@@ -109,11 +130,19 @@ class ResponseCacheItem {
         }
     }
 
+    public function getTtl(int $resourceTtl, int $responseTtl): int {
+        $now         = time();
+        $resourceAge = $now - $this->resourceTimestamp;
+        $responseAge = $now - $this->responseTimestamp;
+        $ttl         = min($resourceTtl - $resourceAge, $responseTtl - $responseAge);
+        return max(0, $ttl);
+    }
+
     /**
      * Helper for tests
      */
     public function withHit(bool $hit): self {
-        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag, $this->lastModified);
+        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag, $this->lastModified, $this->responseTimestamp, $this->resourceTimestamp);
         return $ret;
     }
 
@@ -121,7 +150,7 @@ class ResponseCacheItem {
      * Helper for tests
      */
     public function withLastModified(string $lastModified): self {
-        $ret = new self($this->body, $this->responseCode, $this->headers, $this->hit, $this->file, $this->etag, $lastModified);
+        $ret = new self($this->body, $this->responseCode, $this->headers, $this->hit, $this->file, $this->etag, $lastModified, $this->responseTimestamp, $this->resourceTimestamp);
         return $ret;
     }
 

@@ -199,12 +199,12 @@ class Service {
     }
 
     private function setCacheControlHeader(ResponseCacheItem $response): void {
-        $ttl                                 = min(
-            /** @phpstan-ignore property.notFound */
-            $this->config->dissCacheService->ttl->response,
-            /** @phpstan-ignore property.notFound */
-            $this->config->dissCacheService->ttl->resource
-        );
+        /** @phpstan-ignore property.notFound */
+        $responseTtl = $this->config->dissCacheService->ttl->response;
+        /** @phpstan-ignore property.notFound */
+        $resourceTtl = $this->config->dissCacheService->ttl->resource;
+        $ttl         = $response->getTtl($resourceTtl, $responseTtl);
+
         $response->headers['Cache-Control'] = "max-age=$ttl, must-revalidate, immutable";
     }
 }
