@@ -162,7 +162,20 @@ class Service {
             $sc->resourceProperties     = $cfg->resourceProperties ?? [];
             $sc->relativesProperties    = $cfg->relativesProperties ?? [];
 
-            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null);
+            $authConfig = null;
+            if (isset($cfg->auth)) {
+                $auth          = $cfg->auth;
+                $aclRead       = $auth->aclReadProperty;
+                $public        = $auth->publicRole ?? '';
+                $academic      = $auth->academicRole ?? '';
+                $trustedHeader = $auth->roleTrustedHeader ?? '';
+                $adminRole     = $auth->adminRole ?? '';
+                $authTtl       = $auth->ttl ?? AuthConfig::DEFAULT_AUTH_TTL;
+                $pswdCost      = $auth->passwordCost ?? AuthConfig::DEFAULT_PSWD_COST;
+                $authConfig    = new AuthConfig($aclRead, $public, $academic, $trustedHeader, $adminRole, $authTtl, $pswdCost);
+            }
+
+            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null, $authConfig);
             unset($repos);
 
             $response = $cache->getResponse($param, $id, $noCache);

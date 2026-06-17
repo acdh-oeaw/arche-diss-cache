@@ -264,6 +264,9 @@ class ResponseCache {
         }
 
         $roles = [];
+        if (!empty($authCfg->publicRole)) {
+            $roles[] = $authCfg->publicRole;
+        }
 
         $trustedHeaderRole = $this->authConfig->getTrustedHeaderRole();
         if (!empty($trustedHeaderRole)) {
@@ -274,11 +277,10 @@ class ResponseCache {
         list($user, $pswd) = $this->authConfig->getUserPswd();
         if (!empty($user) && !empty($pswd)) {
             $authUrl = $repoBaseUrl . 'user/' . $user;
-            // $authUrl as a key because it must combine ARCHE instance and user name
             $data    = $this->cache->get($authUrl);
             $failed  = true;
 
-            if ($data && $data->getAge() <= $authCfg->authTtl) {
+            if ($data && $data->getAge() < $authCfg->authTtl) {
                 $data = json_decode($data->value);
                 if (password_verify("$user:$pswd", $data->hash)) {
                     $roles  = array_merge($roles, $data->roles);
@@ -289,11 +291,13 @@ class ResponseCache {
                 $client = $this->authConfig->getClient([$user, $pswd]);
                 $resp   = $client->send(new Request('GET', $authUrl));
                 if ($resp->getStatusCode() === 200) {
-                    $userRoles = json_decode((string) $resp->getBody())->groups;
-                    $roles     = array_merge($roles, $userRoles);
+                    $userRoles   = json_decode((string) $resp->getBody())->groups;
+                    $userRoles[] = $user;
+                    $roles       = array_merge($roles, $userRoles);
 
-                    $data = [
-                        'hash'  => password_hash("$user:$pswd", PASSWORD_BCRYPT, ['cost' => $authCfg->passwordCost]),
+                    $pswdOpts = ['cost' => $authCfg->passwordCost];
+                    $data     = [
+                        'hash'  => password_hash("$user:$pswd", PASSWORD_BCRYPT, $pswdOpts),
                         'roles' => $userRoles,
                     ];
                     $this->cache->set([$authUrl], (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), null);
@@ -304,6 +308,6 @@ class ResponseCache {
             }
         }
 
-        return $roles;
+        return array_values(array_unique($roles));
     }
 }

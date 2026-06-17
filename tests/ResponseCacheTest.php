@@ -26,6 +26,8 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Response;
 use quickRdf\DataFactory as DF;
 use quickRdf\DatasetNode;
 use acdhOeaw\arche\lib\SearchConfig;
@@ -312,10 +314,10 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         // academic
         $respCache = $this->getAclResponseCache(self::ROLE_ACADEMIC);
         try {
-            $resp = $respCache->getResponse([], self::ACL_RES_URL);
+            $respCache->getResponse([], self::ACL_RES_URL);
             /* @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
-        } catch (UnauthorizedException) {
+        } catch (ForbiddenException) {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
@@ -326,10 +328,10 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         // restricted
         $respCache = $this->getAclResponseCache(self::ROLE_RESTRICTED);
         try {
-            $resp = $respCache->getResponse([], self::ACL_RES_URL);
+            $respCache->getResponse([], self::ACL_RES_URL);
             /* @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
-        } catch (ForbiddenException) {
+        } catch (ForbiddenException | UnauthorizedException) {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
@@ -346,16 +348,16 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $resp    = $respCache->getResponse([], $resUrl);
         $this->assertEquals($refResp->unify($resp), $resp);
 
-        $resUrl  = 'https://id.acdh.oeaw.ac.at/MadraRiverDelta/Photos/10YT-96-33b.tif'; // https://arche.acdh.oeaw.ac.at/api/66635 - academic
+        $resUrl  = 'https://id.acdh.oeaw.ac.at/MadraRiverDelta/Photos/10YT-96-33b.tif'; // academic
         $realUrl = 'https://arche.acdh.oeaw.ac.at/api/66635';
         $refResp = (new ResponseCacheItem($realUrl, 302, [], false));
 
         // no auth - exception
         try {
-            $resp = $respCache->getResponse([], $resUrl);
+            $respCache->getResponse([], $resUrl);
             /* @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
-        } catch (UnauthorizedException) {
+        } catch (ForbiddenException | UnauthorizedException) {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
@@ -371,7 +373,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $this->assertEquals($refResp->unify($resp1), $resp1);
         $this->assertEquals($refResp->unify($resp2)->withHit(true), $resp2);
         $this->assertLessThan($t1 / 2, $t2);
-        // different used doesn't affect response caching
+        // different user doesn't affect response caching
         $this->setTrustedHeader('anotherRole');
         $t3    = microtime(true);
         $resp3 = $respCache->getResponse([], $resUrl);
@@ -381,19 +383,153 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         // no authentication fails no matter we cached reponse for authenticated user
         $this->setTrustedHeader('');
         try {
-            $resp = $respCache->getResponse([], $resUrl);
+            $respCache->getResponse([], $resUrl);
             /* @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
-        } catch (UnauthorizedException) {
+        } catch (ForbiddenException | UnauthorizedException) {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
     }
 
-    public function testGetClientRoles(): void {
-        //TODO
+    public function testAuthRealBasic(): void {
+        $authCfg   = $this->getAuthCfgDouble(1);
+        $respCache = $this->getResponseCache(authCfg: $authCfg);
+
+        $resUrl  = 'https://id.acdh.oeaw.ac.at/dostal-nachlass/008/001-100/AT-OeAW-ISA-WD-008-079.tif'; // restricted
+        $realUrl = 'https://arche.acdh.oeaw.ac.at/api/536551';
+        $refResp = (new ResponseCacheItem($realUrl, 302, [], false));
+
+        // academic is not enought
+        $authCfg->trustedHeaderRole = 'someRole';
+        try {
+            $respCache->getResponse([], $resUrl);
+            /* @phpstan-ignore method.impossibleType */
+            $this->assertTrue(false);
+        } catch (ForbiddenException | UnauthorizedException) {
+            /* @phpstan-ignore method.alreadyNarrowedType */
+            $this->assertTrue(true);
+        }
+
+        // admin trouhg trusted header works
+        $authCfg->trustedHeaderRole = self::ROLE_ADMIN;
+        $t1                         = microtime(true);
+        $resp1                      = $respCache->getResponse([], $resUrl);
+        $t1                         = microtime(true) - $t1;
+        $t2                         = microtime(true);
+        $resp2                      = $respCache->getResponse([], $resUrl);
+        $t2                         = microtime(true) - $t2;
+        $this->assertEquals($refResp->unify($resp1), $resp1);
+        $this->assertEquals($refResp->unify($resp2)->withHit(true), $resp2);
+        $this->assertLessThan($t1 / 2, $t2);
+
+        // HTTP basic works and reuses the response cache
+        $authCfg->trustedHeaderRole = '';
+        $authCfg->userPswd = ['rmandell', 'password'];
+        $authCfg->client   = $this->getClient(200, '{"groups": []}');
+        $t3                         = microtime(true);
+        $resp3                      = $respCache->getResponse([], $resUrl);
+        $t3                         = microtime(true) - $t3;
+        $this->assertEquals($refResp->unify($resp3)->withHit(true), $resp3);
+        $this->assertLessThan($t1 / 2, $t2);
+        
+        // wrong HTTP basic auth returns ForbiddenException
+        // (user change to revalidate the auth against the server)
+        $authCfg->userPswd = ['otherUser', 'password'];
+        $authCfg->client   = $this->getClient(403, '');
+        try {
+            $respCache->getResponse([], $resUrl);
+            /* @phpstan-ignore method.impossibleType */
+            $this->assertTrue(false);
+        } catch (ForbiddenException | UnauthorizedException) {
+            /* @phpstan-ignore method.alreadyNarrowedType */
+            $this->assertTrue(true);
+        }
     }
-    
+
+    public function testGetClientRolesNoCache(): void {
+        # disable auth data caching
+        $authCfg = $this->getAuthCfgDouble(0);
+        $cache   = $this->getResponseCache(authCfg: $authCfg);
+
+        // no auth data - only public
+        $this->assertEqualsCanonicalizing([self::ROLE_PUBLIC], $cache->getClientRoles(''));
+
+        // HTTP basic
+        $authCfg->userPswd = ['john', 'password'];
+        $authCfg->client   = $this->getClient(200, '{"groups": ["public", "group"]}');
+        $ref               = [self::ROLE_PUBLIC, 'john', 'group'];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+
+        // HTTP basic and trusted header
+        $authCfg->trustedHeaderRole = 'trusted';
+        $ref                        = [
+            self::ROLE_PUBLIC, self::ROLE_ACADEMIC, 'trusted', 'john', 'group'
+        ];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+
+        // only trusted header (HTTP basic without password should be skipped)
+        $authCfg->userPswd = ['john', ''];
+        $ref               = [
+            self::ROLE_PUBLIC, self::ROLE_ACADEMIC, 'trusted'
+        ];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+
+        // back to public-only
+        $authCfg->trustedHeaderRole = '';
+        $this->assertEqualsCanonicalizing([self::ROLE_PUBLIC], $cache->getClientRoles(''));
+    }
+
+    public function testGetClientRolesCache(): void {
+        $authCfg = $this->getAuthCfgDouble(1);
+        $cache   = $this->getResponseCache(authCfg: $authCfg);
+
+        // trusted header is not cached cause checking it has no cost
+        $authCfg->trustedHeaderRole = 'trusted';
+        $ref                        = [self::ROLE_PUBLIC, 'academic', 'trusted'];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+        $authCfg->trustedHeaderRole = 'other';
+        $ref                        = [self::ROLE_PUBLIC, 'academic', 'other'];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+
+        // HTTP basic is cached, trusted header is not
+        $authCfg->userPswd          = ['john', 'password'];
+        $authCfg->client            = $this->getClient(200, '{"groups": ["group"]}');
+        $ref                        = [
+            self::ROLE_PUBLIC, 'john', 'group', 'other', self::ROLE_ACADEMIC
+        ];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+        $authCfg->trustedHeaderRole = 'trusted';
+        $authCfg->client            = $this->getClient(200, '{"groups": ["otherGroup"]}');
+        $ref                        = [
+            self::ROLE_PUBLIC, 'john', 'group', 'trusted', self::ROLE_ACADEMIC
+        ];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+
+        // HTTP basic cache expires
+        sleep(1);
+        $ref             = [
+            self::ROLE_PUBLIC, 'john', 'otherGroup', 'trusted', self::ROLE_ACADEMIC
+        ];
+        $authCfg->client = $this->getClient(200, '{"groups": ["otherGroup"]}');
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+
+        // password change also expires the cache
+        $authCfg->client   = $this->getClient(200, '{"groups": ["expired"]}');
+        $authCfg->userPswd = ['john', 'notMatchingPassword'];
+        $ref               = [
+            self::ROLE_PUBLIC, 'john', 'expired', 'trusted', self::ROLE_ACADEMIC
+        ];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+        
+        // auth failure ends up with a public role
+        $authCfg->trustedHeaderRole = '';
+        $authCfg->client   = $this->getClient(403, '');
+        $authCfg->userPswd = ['john', 'doesNotMatter'];
+        $ref               = [self::ROLE_PUBLIC];
+        $this->assertEqualsCanonicalizing($ref, $cache->getClientRoles(''));
+    }
+
     /**
      * 
      * @param array<mixed> $params
@@ -452,8 +588,18 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         return new ResponseCache($cache, $this->missHandler, 1, 1, [$repoDouble], authConfig: $this->getAuthCfg());
     }
 
+    private function getClient(int $responseCode, string $responseBody): Client {
+        $stub = $this->createStub(Client::class);
+        $stub->method('send')->willReturn(new Response($responseCode, [], $responseBody));
+        return $stub;
+    }
+
     private function getAuthCfg(): AuthConfig {
         return new AuthConfig(self::ACL_READ_PROPERTY, self::ROLE_PUBLIC, self::ROLE_ACADEMIC, self::ACL_TRUSTED_HEADER, self::ROLE_ADMIN);
+    }
+
+    private function getAuthCfgDouble(int $authTtl): AuthConfigDouble {
+        return new AuthConfigDouble(self::ACL_READ_PROPERTY, self::ROLE_PUBLIC, self::ROLE_ACADEMIC, self::ACL_TRUSTED_HEADER, self::ROLE_ADMIN, authTtl: $authTtl);
     }
 
     private function setTrustedHeader(string $value): void {

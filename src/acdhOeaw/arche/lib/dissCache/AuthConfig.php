@@ -38,13 +38,16 @@ use zozlak\ProxyClient;
  */
 class AuthConfig {
 
+    const DEFAULT_AUTH_TTL  = 60;
+    const DEFAULT_PSWD_COST = 10;
+
     public function __construct(readonly string $aclReadProperty,
                                 readonly string $publicRole = '',
                                 readonly string $academicRole = '',
                                 readonly string $roleTrustedHeader = '',
                                 readonly string $adminRole = '',
-                                readonly int $authTtl = 60,
-                                readonly int $passwordCost = 10) {
+                                readonly int $authTtl = self::DEFAULT_AUTH_TTL,
+                                readonly int $passwordCost = self::DEFAULT_PSWD_COST) {
         ;
     }
 
