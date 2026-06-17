@@ -393,7 +393,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testAuthRealBasic(): void {
-        $authCfg   = $this->getAuthCfgDouble(1);
+        $authCfg   = $this->getAuthCfgDouble(5);
         $respCache = $this->getResponseCache(authCfg: $authCfg);
 
         $resUrl  = 'https://id.acdh.oeaw.ac.at/dostal-nachlass/008/001-100/AT-OeAW-ISA-WD-008-079.tif'; // restricted
