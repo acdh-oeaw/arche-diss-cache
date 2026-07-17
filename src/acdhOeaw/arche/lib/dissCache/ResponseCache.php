@@ -38,7 +38,7 @@ use acdhOeaw\arche\lib\RepoResourceInterface;
  *
  * @author zozlak
  */
-class ResponseCache {
+class ResponseCache implements CallbackContextInterface {
 
     const HASH_ALGO           = 'xxh128';
     const HARD_TTL_MULTIPLIER = 10;

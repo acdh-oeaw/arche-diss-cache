@@ -31,7 +31,7 @@ class MyClass {
     static public method cacheHandler(
         RepositoryResourceInterface $res, 
         array $serveRequestParam,
-        ResponseCache $cache,
+        CallbackContextInterface $contextObj,
         object $config
     ){
         ...whatever needed...
@@ -40,7 +40,7 @@ class MyClass {
 }
 
 $service = new Service('path_to_config.yaml');
-$service->setCallback(fn($res, $param, $responseCache) => MyClass::cacheHandler($res, $param, $responseCache, $service->getConfig()));
+$service->setCallback(fn($res, $param, $contextObj) => MyClass::cacheHandler($res, $param, $contextObj, $service->getConfig()));
 $resId    = ...obtainResourceIdentifierFromTheRequest...;
 $param    = [...readRequestParametersFromTheRequest...];
 $response = $service->serveRequest($resId, $param);
