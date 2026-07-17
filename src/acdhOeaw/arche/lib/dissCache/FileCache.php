@@ -60,7 +60,7 @@ class FileCache {
                                       LoggerInterface | null $log = null,
                                       AuthConfig | null $authConfig = null): self {
         $authConfig ??= new AuthConfig('');
-        return new self($cfg->dir, $authConfig, $log, $cfg->localAccess, $cfg->maxDownloadSizeMb, $cfg->mimeProperty);
+        return new self($cfg->dir, $authConfig, $log, (array) $cfg->localAccess, $cfg->maxDownloadSizeMb, $cfg->mimeProperty);
     }
 
     /**
