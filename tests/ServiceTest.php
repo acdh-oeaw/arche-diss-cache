@@ -39,7 +39,11 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     public function setUp(): void {
         parent::setUp();
 
-        foreach (array_merge(glob('/tmp/__log__'), glob('/tmp/cachePdo*')) as $i) {
+        $toClean = array_merge(
+            glob('/tmp/__log__') ?: [],
+            glob('/tmp/cachePdo*') ?: []
+        );
+        foreach ($toClean as $i) {
             unlink($i);
         }
 
@@ -72,33 +76,33 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testService(): void {
-        $clbck = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service = new Service(__DIR__ . '/config.yaml');
 
         $this->assertInstanceOf(\zozlak\logging\Log::class, $service->getLog());
-        $this->assertEquals(json_decode(json_encode(yaml_parse_file(__DIR__ . '/config.yaml'))), $service->getConfig());
+        $this->assertEquals(json_decode((string) json_encode(yaml_parse_file(__DIR__ . '/config.yaml'))), $service->getConfig());
 
         $service->setCallback($clbck);
         $param    = ['foo' => 'bar', 'baz' => '3'];
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $headers  = array_merge($param, ['Cache-Control' => 'max-age=3600, must-revalidate, immutable']);
-        $ref      = (new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false))->withLastModified($response->lastModified);
-        $this->assertEquals($ref, $response);
+        $ref      = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
+        $this->assertEquals($ref->unify($response), $response);
 
         $response = $service->serveRequest('https://foo/bar', $param);
         $headers  = ['Cache-Control' => 'no-cache'];
-        $ref      = (new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, $headers, false))->withLastModified($response->lastModified);
-        $this->assertEquals($ref, $response);
+        $ref      = new ResponseCacheItem("Requested resource https://foo/bar not in allowed namespace\n", 400, $headers, false);
+        $this->assertEquals($ref->unify($response), $response);
 
         $response = $service->serveRequest('', $param);
-        $ref      = (new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, $headers, false))->withLastModified($response->lastModified);
-        $this->assertEquals($ref, $response);
+        $ref      = new ResponseCacheItem("Requested resource no identifer provided not in allowed namespace\n", 400, $headers, false);
+        $this->assertEquals($ref->unify($response), $response);
     }
 
     public function testCacheError(): void {
-        $clbck = function (RepoResourceInterface $res, array $params): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $params, ResponseCache $cache): ResponseCacheItem {
             throw new ServiceException('foo', 456, null, ['custom' => 'header']);
         };
         $service    = new Service(__DIR__ . '/config.yaml');
@@ -114,9 +118,9 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $t1      = microtime(true);
         $resp2   = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $t2      = microtime(true);
-        $respRef = (new ResponseCacheItem("foo\n", 456, $headersRef, false))->withLastModified($resp1->lastModified);
-        $this->assertEquals($respRef, $resp1);
-        $this->assertEquals($respRef->withHit(true), $resp2);
+        $respRef = new ResponseCacheItem("foo\n", 456, $headersRef, false);
+        $this->assertEquals($respRef->unify($resp1), $resp1);
+        $this->assertEquals($respRef->withHit(true)->unify($resp2), $resp2);
         // second one should come from cache and be much faster
         $t2      -= $t1;
         $t1      -= $t0;
@@ -126,7 +130,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     public function testClearCache(): void {
         $param   = [];
         $headers = ['Cache-Control' => 'max-age=3600, must-revalidate, immutable'];
-        $clbck   = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
+        $clbck   = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service = new Service(__DIR__ . '/config.yaml');
@@ -142,14 +146,34 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $t3       -= $t2;
         $t2       -= $t1;
         $t1       -= $t0;
-        $refResp  = (new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false))->withLastModified($resp1->lastModified);
-        $this->assertEquals($refResp, $resp1);
-        $this->assertEquals($refResp->withLastModified($resp3->lastModified), $resp3);
-        $this->assertEquals($refResp->withHit(true), $resp2);
+        $refResp  = new ResponseCacheItem('https://arche.acdh.oeaw.ac.at/api/21003', 200, $headers, false);
+        $this->assertEquals($refResp->unify($resp1), $resp1);
+        $this->assertEquals($refResp->unify($resp3), $resp3);
+        $this->assertEquals($refResp->withHit(true)->unify($resp2), $resp2);
         $this->assertGreaterThan($t2 * 10, $t1);
         $this->assertGreaterThan($t2 * 10, $t3);
         $lastMod1 = DateTime::createFromFormat(DateTime::RFC1123, $resp1->lastModified);
         $lastMod3 = DateTime::createFromFormat(DateTime::RFC1123, $resp3->lastModified);
+        $this->assertNotFalse($lastMod1);
+        $this->assertNotFalse($lastMod3);
         $this->assertGreaterThanOrEqual(0, $lastMod3->diff($lastMod1)->s);
+    }
+
+    public function testTtl(): void {
+        $clbck = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
+            return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
+        };
+        $service  = new Service(__DIR__ . '/config.yaml');
+        $service->setCallback($clbck);
+        /** @phpstan-ignore property.notFound */
+        $config   = $service->getConfig()->dissCacheService?->ttl;
+        $param    = ['foo' => 'bar', 'baz' => '3'];
+        $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $refTtl   = min($config->resource, $config->response);
+        $this->assertEquals($refTtl, $response->getTtl($config->resource, $config->response));
+
+        sleep(1);
+        $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
+        $this->assertEquals($refTtl - 1, $response->getTtl($config->resource, $config->response));
     }
 }

@@ -26,6 +26,8 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use DateTimeImmutable;
+use BadMethodCallException;
 use quickRdf\Dataset;
 use quickRdf\DatasetNode;
 use quickRdf\DataFactory;
@@ -58,22 +60,27 @@ class RepoResourceCacheItem implements RepoResourceInterface {
         return (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    static public function deserialize(string $data): self {
+    static public function deserialize(string $data, string $cacheDate): self {
         self::$parser ??= new NQuadsParser(new DataFactory(), false, NQuadsParser::MODE_TRIPLES);
 
-        $data  = json_decode($data);
-        $graph = new Dataset();
+        $data      = json_decode($data);
+        $cacheDate = DateTimeImmutable::createFromFormat("Y-m-d H:i:s", $cacheDate) ?: throw new BadMethodCallException("$cacheDate is not a data in Y-m-d H:i:s format");
+        $res       = new self($data->uri, null, $cacheDate->getTimestamp());
+        $graph     = new Dataset();
         $graph->add(self::$parser->parse($data->metadata));
-        $res   = new self($data->uri, null);
         $res->setGraph($graph);
         return $res;
     }
 
-    public function __construct(string $url, ?RepoInterface $repo) {
+    public readonly int $cacheTimestamp;
+
+    public function __construct(string $url, ?RepoInterface $repo,
+                                int | null $cacheTimestamp = null) {
         $this->metadata = new DatasetNode(DataFactory::namedNode($url));
         if ($repo !== null) {
             $this->repoInt = $repo;
         }
+        $this->cacheTimestamp = $cacheTimestamp ?? time();
     }
 
     public function loadMetadata(bool $force = false,

@@ -58,14 +58,14 @@ class ResponseCacheItemTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testSendStringGzip(): void {
-        $this->expectOutputString(gzencode('baz', -1, ZLIB_ENCODING_GZIP));
+        $this->expectOutputString((string) gzencode('baz', -1, ZLIB_ENCODING_GZIP));
         $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip';
         $item                            = new ResponseCacheItem('baz', 201, [], true, false);
         $item->send(true);
     }
 
     public function testSendStringDeflate(): void {
-        $this->expectOutputString(gzencode('baz', -1, ZLIB_ENCODING_DEFLATE));
+        $this->expectOutputString((string) gzencode('baz', -1, ZLIB_ENCODING_DEFLATE));
         $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip;q=0.2,deflate';
         $item                            = new ResponseCacheItem('baz', 201, [], true, false);
         $item->send();
@@ -98,7 +98,7 @@ class ResponseCacheItemTest extends \PHPUnit\Framework\TestCase {
         $headers                         = [];
         $item                            = new ResponseCacheItem(__FILE__, 200, $headers, true, true);
         $this->expectOutputString($this->getCompressed(ZLIB_ENCODING_GZIP));
-        $item->send(true);
+        $item->send();
         $this->assertEquals(200, http_response_code());
     }
 
@@ -107,16 +107,28 @@ class ResponseCacheItemTest extends \PHPUnit\Framework\TestCase {
         $headers                         = [];
         $item                            = new ResponseCacheItem(__FILE__, 400, $headers, false, true);
         $this->expectOutputString($this->getCompressed(ZLIB_ENCODING_DEFLATE));
-        $item->send(true);
+        $item->send();
         $this->assertEquals(400, http_response_code());
+    }
+
+    public function testSendFileAutodetect(): void {
+        $_SERVER['HTTP_ACCEPT_ENCODING'] = 'gzip;q=0.2,deflate';
+        // the content is text/plain but this is not important for the test :)
+        $headers                         = ['Content-Type' => 'image/png'];
+        $item                            = new ResponseCacheItem(__FILE__, 200, $headers, false, true);
+        $this->expectOutputString((string) file_get_contents(__FILE__));
+        $item->send();
+        $this->assertEquals(200, http_response_code());
     }
 
     private function getCompressed(int $encoding): string {
         $encoder = deflate_init($encoding);
+        $this->assertNotFalse($encoder);
         $file    = fopen(__FILE__, 'r');
+        $this->assertNotFalse($file);
         $output  = '';
         while (!feof($file)) {
-            $chunk  = fread($file, ResponseCacheItem::OUTPUT_CHUNK);
+            $chunk  = (string) fread($file, ResponseCacheItem::OUTPUT_CHUNK);
             $output .= deflate_add($encoder, $chunk, ZLIB_BLOCK);
         }
         $output .= deflate_add($encoder, '', ZLIB_FINISH);

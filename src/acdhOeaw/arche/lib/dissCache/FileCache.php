@@ -35,40 +35,52 @@ use RecursiveIteratorIterator;
 use Psr\Log\LoggerInterface;
 use GuzzleHttp\Psr7\Request;
 use zozlak\ProxyClient;
+use acdhOeaw\arche\lib\RepoResourceInterface;
+use termTemplates\PredicateTemplate as PT;
+use rdfInterface\NamedNodeInterface;
 
 /**
- * Helper functions for managing files cache
+ * Local cache for repository resource binary payloads.
  *
  * @author zozlak
  */
 class FileCache {
 
-    const MB            = 1048576;
-    const BY_MOD_TIME   = 1;
-    const BY_SIZE       = 2;
-    const REF_FILE_NAME = 'ref';
-
-    private string $dir;
-    private LoggerInterface | null $log;
+    const MB                           = 1048576;
+    const BY_MOD_TIME                  = 1;
+    const BY_SIZE                      = 2;
+    const REF_FILE_NAME                = 'ref';
+    const DEFAULT_MAX_DOWNLOAD_SIZE_MB = 50;
 
     /**
      * 
-     * @var array<string, object>
+     * @param object{dir: string, localAccess: array<string, object>, maxDownloadSizeMb: float, mimeProperty: string} $cfg
      */
-    private array $localAccess;
+    static public function fromConfig(object $cfg,
+                                      LoggerInterface | null $log = null,
+                                      AuthConfig | null $authConfig = null): self {
+        $authConfig ??= new AuthConfig('');
+        return new self($cfg->dir, $authConfig, $log, $cfg->localAccess, $cfg->maxDownloadSizeMb, $cfg->mimeProperty);
+    }
 
     /**
      * 
-     * @param string $cacheDir
-     * @param LoggerInterface|null $log
+     * @param AuthConfig $authConfig authorization config object used to get an authorization-aware
+     *   guzzle client for fetching remote data
      * @param array<string, object> $localAccess
+     * @param float $maxDwnldSizeMB Allows to limit maximum downloaded file size. If the
+     *   to-be-downloaded file is bigger, the FileCacheException is being thrown.
+     *   0 means that files of any size can be downloaded.
+     * @param string $mimeProperty metadata property storing the mime type of a resource -
+     *   used by the getResourcePath() method
      */
-    public function __construct(string $cacheDir,
-                                LoggerInterface | null $log = null,
-                                array $localAccess = []) {
-        $this->dir         = $cacheDir;
-        $this->log         = $log;
-        $this->localAccess = $localAccess;
+    public function __construct(readonly string $dir,
+                                readonly AuthConfig $authConfig,
+                                readonly LoggerInterface | null $log = null,
+                                readonly array $localAccess = [],
+                                readonly float $maxDwnldSizeMB = self::DEFAULT_MAX_DOWNLOAD_SIZE_MB,
+                                readonly string | NamedNodeInterface $mimeProperty = '') {
+        
     }
 
     public function mintPath(string $filename = ''): string {
@@ -92,15 +104,9 @@ class FileCache {
      * @param string $expectedMime expected mime type. If the resource content is 
      *   downloaded and the download reports different mime type, an error is thrown. 
      *   Passing an empty value skips the check.
-     * @param array<string, mixed> $guzzleOpts guzzle Client options to be used
-     *   if a resource binary is to be downloaded. Allows passing e.g. credentials.
-     * @param float $maxSizeMb Allows to limit maximum downloaded file size. If the
-     *   to-be-downloaded file is bigger, the FileCacheException is being thrown.
-     *   0 means that files of any size can be downloaded.
      *   
      */
-    public function getRefFilePath(string $resUrl, string $expectedMime = '',
-                                   array $guzzleOpts = [], float $maxSizeMb = 0): string {
+    public function getRefFilePath(string $resUrl, string $expectedMime = ''): string {
         // direct local access
         foreach ($this->localAccess as $nmsp => $nmspCfg) {
             if (str_starts_with($resUrl, $nmsp)) {
@@ -126,9 +132,17 @@ class FileCache {
         // cache access
         $path = $this->dir . '/' . hash(ResponseCacheItem::ETAG_HASH, $resUrl) . '/ref';
         if (!file_exists($path)) {
-            $this->fetchResourceBinary($path, $resUrl, $expectedMime, $guzzleOpts, (int) ($maxSizeMb * self::MB));
+            $this->fetchResourceBinary($path, $resUrl, $expectedMime);
         }
         return $path;
+    }
+
+    public function getResourceBinaryPath(RepoResourceInterface $res): string {
+        $mime = (string) $res->getGraph()->getObject(new PT($this->mimeProperty));
+        if (empty($mime)) {
+            throw new FileCacheException('Resource has no mime type', FileCacheException::NO_BINARY);
+        }
+        return $this->getRefFilePath((string) $res->getUri(), $mime);
     }
 
     /**
@@ -137,12 +151,11 @@ class FileCache {
      * @param string $expectedMime expected mime type. If the resource content is 
      *   downloaded and the download reports different mime type, an error is thrown. 
      *   Passing an empty value skips the check.
-     * @param array<string, mixed> $guzzleOpts
      */
     private function fetchResourceBinary(string $path, string $resUrl,
-                                         string $expectedMime,
-                                         array $guzzleOpts, int $maxSize): void {
+                                         string $expectedMime): void {
         $this->log?->info("Downloading " . $resUrl);
+        $maxSize = (int) ($this->maxDwnldSizeMB * self::MB);
 
         $dir = dirname($path);
         if (!is_dir($dir)) {
@@ -150,22 +163,24 @@ class FileCache {
         }
         $pathTmp = "$path." . rand();
 
-        $guzzleOpts['stream']      = true;
-        $guzzleOpts['http_errors'] = false;
-        $client                    = ProxyClient::factory($guzzleOpts);
+        $client = $this->authConfig->getClient(['stream' => true]);
         if ($maxSize > 0) {
-            $resp = $client->send(new Request('head', $resUrl));
+            $resp = $client->send(new Request('HEAD', $resUrl));
             $size = (int) ($resp->getHeader('Content-Length')[0] ?? 0);
             if ($size > $maxSize) {
                 throw new FileCacheException('Requested file too large', FileCacheException::TOO_LARGE);
             }
         }
-        $resp = $client->send(new Request('get', $resUrl));
-        if ($resp->getStatusCode() !== 200) {
-            throw new FileCacheException('No such file', FileCacheException::NO_FILE);
-        }
+        $resp     = $client->send(new Request('GET', $resUrl));
+        match ($resp->getStatusCode()) {
+            200 => true,
+            401 => throw new FileCacheException('Unauthorized', FileCacheException::UNAUTHORIZED),
+            403 => throw new FileCacheException('Forbidden', FileCacheException::FORBIDDEN),
+            default => throw new FileCacheException('Failed to fetch file with code ' . $resp->getStatusCode(), FileCacheException::NO_FILE),
+        };
         // mime mismatch is most probably redirect to metadata
         $realMime = $resp->getHeader('Content-Type')[0] ?? 'lacking content type';
+        $realMime = explode(';', $realMime)[0]; // skip the auxiliary mime parameters
         if (!empty($expectedMime) && $expectedMime !== $realMime) {
             $this->log?->error("Mime mismatch: downloaded $realMime, expected $expectedMime");
             throw new FileCacheException('The requested file misses binary content', FileCacheException::NO_BINARY);

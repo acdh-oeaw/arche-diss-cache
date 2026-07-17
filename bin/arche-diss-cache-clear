@@ -1,5 +1,6 @@
 #!/usr/bin/php
 <?php
+
 /*
  * The MIT License
  *
@@ -25,36 +26,68 @@
  */
 
 use acdhOeaw\arche\lib\dissCache\FileCache;
+use acdhOeaw\arche\lib\dissCache\CachePdo;
 use zozlak\logging\Log;
 
 $argc ??= 0;
 $argv ??= [];
 
 $dir = __DIR__;
-while($dir !== '/' && !file_exists("$dir/vendor/autoload.php")) {
+while ($dir !== '/' && !file_exists("$dir/vendor/autoload.php")) {
     $dir = dirname($dir);
 }
 require_once "$dir/vendor/autoload.php";
 
-if (!in_array($argc, [2, 4])) {
-    echo "Clears thumbnails cache\nUsage:\n";
+if (!in_array($argc, [2, 4, 7])) {
+    echo "Clears dissemination service cache\nUsage:\n";
     echo "  " . $argv[0] . " pathToConfig.yaml\n";
     echo "or\n";
-    echo "  " . $argv[0] . " cacheDir cacheSizeLimitMb mode\n      where `mode` should be 'time' or 'size'\n";
+    echo "  " . $argv[0] . " metadataConnStr metadataAgeLimit metadataCountLimit cacheDir cacheSizeLimitMb mode\n      where `mode` should be 'time' or 'size'\n";
     exit();
 }
 
-if ($argc === 2) {
-    $config  = yaml_parse_file($argv[1]);
-    $dir     = $config['cache']['dir'];
-    $maxSize = $config['cache']['maxSizeMb'];
-    $mode    = $config['cache']['clearMode'];
-} else {
-    $dir     = $argv[1];
-    $maxSize = $argv[2];
-    $mode    = $argv[3];
-}
-$mode = $mode === 'size' ? FileCache::BY_SIZE : FileCache::BY_MOD_TIME;
+$log = new Log('php://stdout');
 
-$cache = new FileCache($dir, new Log('php://stdout'));
-$cache->clean($maxSize, $mode);
+if ($argc === 2) {
+    $config = yaml_parse_file($argv[1]);
+    if (isset($config['cache'])) {
+        $dir     = $config['cache']['dir'];
+        $maxSize = $config['cache']['maxSizeMb'];
+        $mode    = $config['cache']['clearMode'];
+    }
+    if (isset($config['dissCacheService'])) {
+        $dbConnStr = $config['dissCacheService']['db'];
+        $maxAge    = max(...array_values($config['dissCacheService']['ttl']));
+        $maxCount  = $config['dissCacheService']['maxCount'];
+    }
+} else {
+    $dbConnStr = $argv[1];
+    $maxAge    = $argv[2];
+    $maxCount  = $argv[3];
+
+    if ($argc == 7) {
+        $dir     = $argv[4];
+        $maxSize = $argv[5];
+        $mode    = $argv[6];
+    }
+}
+
+if (isset($dir) && isset($maxSize) && isset($mode)) {
+    $cfg   = (object) [
+            'dir'               => (string) $dir,
+            'localAccess'       => [],
+            'maxDownloadSizeMb' => 0.0,
+            'mimeProperty'      => '',
+    ];
+    $cache = FileCache::fromConfig($cfg, $log, null);
+    $mode  = $mode === 'size' ? FileCache::BY_SIZE : FileCache::BY_MOD_TIME;
+    $cache->clean($maxSize, $mode);
+}
+
+if (isset($dbConnStr) && isset($maxAge) && isset($maxCount)) {
+    $cache   = new CachePdo($dbConnStr);
+    $removed = $cache->prune($maxAge, $maxCount);
+    $log->info("$removed metadata entries removed");
+}
+
+$log->info("Cache cleaning completed");

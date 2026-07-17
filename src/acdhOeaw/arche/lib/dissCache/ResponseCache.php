@@ -26,10 +26,12 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use DateTimeImmutable;
+use Psr\Log\LoggerInterface;
+use GuzzleHttp\Psr7\Request;
+use termTemplates\PredicateTemplate as PT;
 use acdhOeaw\arche\lib\exception\NotFound;
 use acdhOeaw\arche\lib\SearchConfig;
-use Psr\Log\LoggerInterface;
+use acdhOeaw\arche\lib\RepoResourceInterface;
 
 /**
  * Description of Cache
@@ -56,10 +58,13 @@ class ResponseCache {
     private $missHandler;
     private int $ttlResource;
     private int $hardTtlResource;
+    private AuthConfig | null $authConfig = null;
+    private FileCache | null $fileCache   = null;
     private int $ttlResponse;
     private SearchConfig $searchCfg;
     private LoggerInterface | null $log;
     private string $lastResponseKey;
+    private bool $noCache;
 
     /**
      * 
@@ -71,11 +76,15 @@ class ResponseCache {
                                 int $ttlResource, int $ttlResponse,
                                 array $repos, ?SearchConfig $config = null,
                                 ?LoggerInterface $log = null,
-                                ?int $hardTtlResource = null) {
+                                ?int $hardTtlResource = null,
+                                ?AuthConfig $authConfig = null,
+                                ?FileCache $fileCache = null) {
         $this->cache           = $cache;
         $this->missHandler     = $missHandler;
         $this->ttlResource     = $ttlResource;
         $this->hardTtlResource = $hardTtlResource ?? $ttlResource * self::HARD_TTL_MULTIPLIER;
+        $this->authConfig      = $authConfig;
+        $this->fileCache       = $fileCache;
         $this->ttlResponse     = $ttlResponse;
         $this->repos           = $repos;
         $this->searchCfg       = $config ?? new SearchConfig();
@@ -101,8 +110,7 @@ class ResponseCache {
             $resItem = $this->cache->get($resId);
         }
         if ($resItem !== false) {
-            $resCacheCreation = (new DateTimeImmutable($resItem->created))->getTimestamp();
-            $diffRes          = $now - $resCacheCreation;
+            $diffRes = $resItem->getAge();
             $this->log?->debug("Resource found in cache (diffRes $diffRes, resTtl $this->ttlResource)");
             // if resource in cache is too old, check the resource's modification date at source
             if ($diffRes >= $this->ttlResource) {
@@ -118,6 +126,7 @@ class ResponseCache {
                         
                     }
                 }
+                $resCacheCreation = $resItem->getCreatedTimestamp();
                 if ($resLastMod > $resCacheCreation || $diffRes >= $this->hardTtlResource) {
                     // invalidate resource cache
                     $this->log?->debug("Invalidating resource's cache (resLastMod - resCacheCreation = " . ($resLastMod - $resCacheCreation) . ", diffRes $diffRes, resHardTtl $this->hardTtlResource)");
@@ -128,19 +137,20 @@ class ResponseCache {
             }
             if ($resItem !== false) {
                 // regenerate the response key using the canonical resource URI
-                $res    = RepoResourceCacheItem::deserialize($resItem->value);
+                $res    = RepoResourceCacheItem::deserialize($resItem->value, $resItem->created);
                 $resUri = (string) $res->getUri();
                 if ($resUri !== $resId) {
                     $this->lastResponseKey = $this->hashParams($params, (string) $resUri);
                     $this->log?->debug("Updating response key to $this->lastResponseKey");
                 }
 
+                $this->checkAuth($res);
+
                 $respItem = $this->cache->get($this->lastResponseKey);
-                $respDiff = $respItem !== false ? $now - (new DateTimeImmutable($respItem->created))->getTimestamp() : 'not in cache';
+                $respDiff = $respItem !== false ? $respItem->getAge() : 'not in cache';
                 if ($respItem !== false && $respDiff < $this->ttlResponse) {
-                    $respItem = ResponseCacheItem::deserialize($respItem->value);
+                    $respItem = ResponseCacheItem::deserialize($respItem->value, $respItem->created, $res->cacheTimestamp);
                     if (!$respItem->file || file_exists($respItem->body)) {
-#                        $this->checkAuth();
                         $this->log?->info("Serving response from cache (respDiff $respDiff, respTtl $this->ttlResponse)");
                         return $respItem;
                     } else {
@@ -167,21 +177,21 @@ class ResponseCache {
             if (!$res) {
                 throw new NotFound("Resource $resId can not be found", 400);
             }
+
+            $this->checkAuth($res);
+
             $resUri                = (string) $res->getUri();
             $this->lastResponseKey = $this->hashParams($params, (string) $resUri);
             $this->log?->debug("Updating response key to $this->lastResponseKey");
         }
-#        $this->checkAuth();
         // finally generate the response
         $this->log?->info("Generating the response");
         try {
-            $value = ($this->missHandler)($res, $params, $noCache);
+            $this->noCache = $noCache;
+            $value         = ($this->missHandler)($res, $params, $this);
             $this->log?->info("Caching the response under a key $this->lastResponseKey");
             $this->cache->set([$this->lastResponseKey], $value->serialize(), null);
         } finally {
-            if (!$res) {
-                throw new NotFound("Resource $resId can not be found", 400);
-            }
             if (!($res instanceof RepoResourceCacheItem)) {
                 // so late to preserve any changes done to the resource metadata by the missHandler
                 $this->log?->debug("Caching the resource");
@@ -219,5 +229,105 @@ class ResponseCache {
         foreach ($resKeys as $key) {
             $this->cache->delete("%$key");
         }
+    }
+
+    public function getLog(): LoggerInterface | null {
+        return $this->log;
+    }
+
+    public function getFileCache(): FileCache {
+        if ($this->fileCache === null) {
+            throw new FileCacheException('FileCache object not initialized - check the service configuration.');
+        }
+        return $this->fileCache;
+    }
+
+    public function getNoCache(): bool {
+        return $this->noCache;
+    }
+
+    private function checkAuth(RepoResourceInterface $res): void {
+        $authCfg = $this->authConfig;
+        if ($authCfg === null) {
+            return;
+        }
+
+        $tmpl  = new PT($authCfg->aclReadProperty);
+        $roles = $res->getGraph()->listObjects($tmpl)->getValues();
+        if (!empty($authCfg->publicRole) && in_array($authCfg->publicRole, $roles)) {
+            return;
+        }
+
+        $repoBaseUrl = (string) preg_replace('/[0-9]+$/', '', (string) $res->getUri());
+        $clientRoles = $this->getClientRoles($repoBaseUrl);
+        if (count($clientRoles) === 0) {
+            throw new UnauthorizedException();
+        }
+
+        if (!empty($authCfg->adminRole) && in_array($authCfg->adminRole, $clientRoles)) {
+            return;
+        }
+        if (count(array_intersect($clientRoles, $roles)) > 0) {
+            return;
+        }
+
+        throw new ForbiddenException();
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function getClientRoles(string $repoBaseUrl): array {
+        $authCfg = $this->authConfig;
+        if ($authCfg === null) {
+            return [];
+        }
+
+        $roles = [];
+        if (!empty($authCfg->publicRole)) {
+            $roles[] = $authCfg->publicRole;
+        }
+
+        $trustedHeaderRole = $this->authConfig->getTrustedHeaderRole();
+        if (!empty($trustedHeaderRole)) {
+            $roles[] = $trustedHeaderRole;
+            $roles[] = $authCfg->academicRole;
+        }
+
+        list($user, $pswd) = $this->authConfig->getUserPswd();
+        if (!empty($user) && !empty($pswd)) {
+            $authUrl = $repoBaseUrl . 'user/' . $user;
+            $data    = $this->cache->get($authUrl);
+            $failed  = true;
+
+            if ($data && $data->getAge() < $authCfg->authTtl) {
+                $data = json_decode($data->value);
+                if (password_verify("$user:$pswd", $data->hash)) {
+                    $roles  = array_merge($roles, $data->roles);
+                    $failed = false;
+                }
+            }
+            if ($failed) {
+                $client = $this->authConfig->getClient(['auth' => [$user, $pswd]]);
+                $resp   = $client->send(new Request('GET', $authUrl));
+                if ($resp->getStatusCode() === 200) {
+                    $userRoles   = json_decode((string) $resp->getBody())->groups;
+                    $userRoles[] = $user;
+                    $roles       = array_merge($roles, $userRoles);
+
+                    $pswdOpts = ['cost' => $authCfg->passwordCost];
+                    $data     = [
+                        'hash'  => password_hash("$user:$pswd", PASSWORD_BCRYPT, $pswdOpts),
+                        'roles' => $userRoles,
+                    ];
+                    $this->cache->set([$authUrl], (string) json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), null);
+                } else {
+                    // don't store orphaned authentication entries in cache
+                    $this->cache->delete($authUrl);
+                }
+            }
+        }
+
+        return array_values(array_unique($roles));
     }
 }

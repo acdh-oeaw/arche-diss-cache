@@ -57,7 +57,7 @@ class RepoResourceProxyTest extends \PHPUnit\Framework\TestCase {
             "uri": "http://foo/bar",
             "metadata": "<http://foo/bar> <http://prop/id> <http://foo/bar> ."
         }';
-        $res  = RepoResourceCacheItem::deserialize($data);
+        $res  = RepoResourceCacheItem::deserialize($data, '2026-06-11 13:18:24');
         $this->assertInstanceOf(RepoResourceCacheItem::class, $res);
         $this->assertTrue($id->equals($res->getUri()));
         $meta = $res->getGraph();
@@ -70,9 +70,9 @@ class RepoResourceProxyTest extends \PHPUnit\Framework\TestCase {
 
         $metaOrig   = $resOrig->getGraph();
         $cacheValue = RepoResourceCacheItem::serialize($resOrig);
-        $resDes     = RepoResourceCacheItem::deserialize($cacheValue);
+        $resDes     = RepoResourceCacheItem::deserialize($cacheValue, '2026-06-11 13:18:24');
         $metaDes    = $resDes->getGraph();
         $this->assertTrue($resOrig->getUri()->equals($resDes->getUri()));
-        $this->assertTrue($metaOrig->getGraph()->equals($metaDes->getGraph()));
+        $this->assertTrue($metaOrig->equals($metaDes));
     }
 }

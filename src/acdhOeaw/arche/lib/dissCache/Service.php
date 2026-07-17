@@ -34,25 +34,7 @@ use acdhOeaw\arche\lib\exception\NotFound;
 /**
  * Wrapper handling boilerplate code around the ARCHE microservice initialization
  * 
- * Requires following config file structure:
- * ```
- * dissCacheService:
- *   db: sqlite:/some/path
- *   log:
- *     file: /some/path
- *     level: debug
- *    ttl:
- *      resource: 3600
- *      response: 31536000
- *    repoDb:
- *    - repoConfigPath.yaml
- *    allowedNmsp:
- *    - https://one
- *    - https://another
- *    metadataMode: parents
- *    parentProperty: ""
- *    resourceProperties: []
- *    relativesProperties: []
+ * See the tests/config.yaml for the required config file structure.
  * ```
  * @author zozlak
  */
@@ -162,7 +144,16 @@ class Service {
             $sc->resourceProperties     = $cfg->resourceProperties ?? [];
             $sc->relativesProperties    = $cfg->relativesProperties ?? [];
 
-            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null);
+            $authConfig = null;
+            if (isset($cfg->auth)) {
+                $authConfig    = AuthConfig::fromConfig($cfg->auth);
+            }
+            $fileCache = null;
+            if (isset($this->config->fileCache)) {
+                $fileCache = FileCache::fromConfig($this->config->fileCache, $this->log, $authConfig);
+            }
+            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null, $authConfig, $fileCache);
+            unset($repos);
 
             $response = $cache->getResponse($param, $id, $noCache);
             $this->setCacheControlHeader($response);
@@ -198,12 +189,12 @@ class Service {
     }
 
     private function setCacheControlHeader(ResponseCacheItem $response): void {
-        $ttl                                 = min(
-            /** @phpstan-ignore property.notFound */
-            $this->config->dissCacheService->ttl->response,
-            /** @phpstan-ignore property.notFound */
-            $this->config->dissCacheService->ttl->resource
-        );
+        /** @phpstan-ignore property.notFound */
+        $responseTtl = $this->config->dissCacheService->ttl->response;
+        /** @phpstan-ignore property.notFound */
+        $resourceTtl = $this->config->dissCacheService->ttl->resource;
+        $ttl         = $response->getTtl($resourceTtl, $responseTtl);
+
         $response->headers['Cache-Control'] = "max-age=$ttl, must-revalidate, immutable";
     }
 }

@@ -3,7 +3,7 @@
 /*
  * The MIT License
  *
- * Copyright 2024 zozlak.
+ * Copyright 2026 zozlak.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,27 +26,43 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use DateTimeImmutable;
+use GuzzleHttp\Client;
+use GuzzleHttp\Psr7\Response;
+use PHPUnit\Framework\TestCase;
 
 /**
- * Description of CacheItem
+ * Test double of the AuthConfig class
  *
  * @author zozlak
  */
-class CacheItem {
-
-    public int $id;
-    public string $created;
-    public string $value;
+class AuthConfigDouble extends AuthConfig {
 
     /**
-     * Returns cache item's age in seconds
+     * 
+     * @var array{0: string, 1: string}
      */
-    public function getAge(): int {
-        return time() - $this->getCreatedTimestamp();
+    public array $userPswd           = ['', ''];
+    public string $trustedHeaderRole = '';
+
+    public Client $client;
+
+    /**
+     * 
+     * @return array{0: string, 1: string}
+     */
+    public function getUserPswd(): array {
+        return $this->userPswd;
     }
 
-    public function getCreatedTimestamp(): int {
-        return (new DateTimeImmutable($this->created))->getTimestamp();
+    public function getTrustedHeaderRole(): string {
+        return $this->trustedHeaderRole;
+    }
+
+    /**
+     * 
+     * @param array<string, mixed> $guzzleOpts
+     */
+    public function getClient(array $guzzleOpts = []): Client {
+        return $this->client;
     }
 }

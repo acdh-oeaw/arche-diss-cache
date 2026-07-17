@@ -27,6 +27,8 @@
 namespace acdhOeaw\arche\lib\dissCache;
 
 use PDO;
+use DateTimeImmutable;
+use DateInterval;
 
 /**
  * Description of CachePdoTest
@@ -37,7 +39,7 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
 
     public function setUp(): void {
         parent::setUp();
-        foreach (glob(sys_get_temp_dir() . '/cachePdo_*') as $i) {
+        foreach (glob(sys_get_temp_dir() . '/cachePdo_*') ?: [] as $i) {
             unlink($i);
         }
     }
@@ -147,5 +149,53 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
         $cache->delete("%$key1");
         $this->assertFalse($cache->get($key1));
         $this->assertFalse($cache->get($key2));
+    }
+
+    public function testPrune(): void {
+        $cache = new CachePdo('sqlite::memory:', 'testSimple');
+        $data  = array_map(fn($x) => (string) $x, range(1, 10));
+
+        foreach ($data as $i) {
+            $cache->set([$i . '_1', $i . '_2'], $i, (int) $i);
+            $this->assertIsObject($cache->get($i . '_1'));
+        }
+
+        // don't remove anything
+        $count = $cache->prune(10, 10);
+        $this->assertEquals(0, $count);
+        foreach ($data as $i) {
+            $this->assertIsObject($cache->get($i . '_1'), $i);
+            $this->assertIsObject($cache->get($i . '_2'), $i);
+        }
+
+        // remove by count
+        $count = $cache->prune(10, 7);
+        $this->assertEquals(3, $count);
+        foreach ($data as $i) {
+            if ((int) $i <= 3) {
+                $this->assertFalse($cache->get($i . '_1'), $i);
+                $this->assertFalse($cache->get($i . '_2'), $i);
+            } else {
+                $this->assertIsObject($cache->get($i . '_1'), $i);
+                $this->assertIsObject($cache->get($i . '_2'), $i);
+            }
+        }
+
+        // remove by ttl
+        sleep(2);
+        foreach (array_slice($data, 0, 3) as $i) {
+            $cache->set([$i . '_1', $i . '_2'], $i, (int) $i);
+        }
+        $count = $cache->prune(1, 10);
+        $this->assertEquals(7, $count);
+        foreach ($data as $i) {
+            if ((int) $i <= 3) {
+                $this->assertIsObject($cache->get($i . '_1'), $i);
+                $this->assertIsObject($cache->get($i . '_2'), $i);
+            } else {
+                $this->assertFalse($cache->get($i . '_1'), $i);
+                $this->assertFalse($cache->get($i . '_2'), $i);
+            }
+        }
     }
 }

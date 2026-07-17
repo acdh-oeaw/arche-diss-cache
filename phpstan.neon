@@ -1,0 +1,7 @@
+parameters:
+    paths:
+        - src
+        - tests
+        - bin
+    tips:
+        treatPhpDocTypesAsCertain: false

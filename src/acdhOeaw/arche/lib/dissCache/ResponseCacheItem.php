@@ -26,7 +26,8 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use DateTime;
+use DateTimeImmutable;
+use BadMethodCallException;
 use zozlak\httpAccept\Accept;
 use zozlak\httpAccept\NoMatchException;
 
@@ -37,18 +38,33 @@ use zozlak\httpAccept\NoMatchException;
  */
 class ResponseCacheItem {
 
-    const OUTPUT_CHUNK = 1048576; // 1 MB
-    const ETAG_HASH    = 'xxh128';
+    const OUTPUT_CHUNK   = 1048576; // 1 MB
+    const ETAG_HASH      = 'xxh128';
+    const NO_COMPRESSION = 'image/*, audio/*, video/*, application/zip, application/gzip, application/x-bzip2, application/x-bzip, application/x-lzma';
 
-    static public function deserialize(string $data): self {
-        $data = json_decode($data);
-        $d    = new ResponseCacheItem($data->body, $data->responseCode, (array) $data->headers, true, $data->file, $data->etag, $data->lastModified);
-#        $d->auth         = $data->auth;
+    static public function deserialize(string $data, string $createdDate,
+                                       int $resourceTimestamp): self {
+        $data            = json_decode($data);
+        $cachedDate      = DateTimeImmutable::createFromFormat("Y-m-d H:i:s", $createdDate) ?: throw new BadMethodCallException("$createdDate is not a data in Y-m-d H:i:s format");
+        $cachedTimestamp = $cachedDate->getTimestamp();
+        $d               = new ResponseCacheItem(
+            $data->body,
+            $data->responseCode,
+            (array) $data->headers,
+            true,
+            $data->file,
+            $data->etag,
+            $data->lastModified,
+            $cachedTimestamp,
+            $resourceTimestamp
+        );
         return $d;
     }
 
     public readonly string $etag;
     public readonly string $lastModified;
+    public readonly int $responseTimestamp;
+    public readonly int $resourceTimestamp;
 
     /**
      * 
@@ -59,7 +75,9 @@ class ResponseCacheItem {
                                 public array $headers = [],
                                 readonly bool $hit = false,
                                 readonly bool $file = false, string $etag = '',
-                                string $lastModified = '') {
+                                string $lastModified = '',
+                                int | null $responseTimestamp = null,
+                                int | null $resourceTimestamp = null) {
         if (!empty($etag)) {
             $this->etag = $etag;
         } elseif ($file) {
@@ -68,19 +86,22 @@ class ResponseCacheItem {
             $this->etag = hash(self::ETAG_HASH, $body);
         }
 
+        $now = new DateTimeImmutable();
         if (empty($lastModified)) {
-            $lastModified = (new DateTime())->format(DateTime::RFC1123);
+            $lastModified = $now->format(DateTimeImmutable::RFC1123);
         }
-        $this->lastModified = $lastModified;
-
-#        $this->auth         = $auth;
+        $this->lastModified      = $lastModified;
+        $this->responseTimestamp = $responseTimestamp ?? $now->getTimestamp();
+        $this->resourceTimestamp = $resourceTimestamp ?? $now->getTimestamp();
     }
 
     public function serialize(): string {
         return (string) json_encode($this, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     }
 
-    public function send(bool $compress = true): void {
+    public function send(?bool $compress = null): void {
+        $compress ??= $this->getCompressFromContentTypeHeader();
+
         http_response_code($this->responseCode);
         foreach ($this->headers as $header => $values) {
             $values = is_array($values) ? $values : [$values];
@@ -109,19 +130,44 @@ class ResponseCacheItem {
         }
     }
 
+    public function getTtl(int $resourceTtl, int $responseTtl): int {
+        $now         = time();
+        $resourceAge = $now - $this->resourceTimestamp;
+        $responseAge = $now - $this->responseTimestamp;
+        $ttl         = min($resourceTtl - $resourceAge, $responseTtl - $responseAge);
+        return max(0, $ttl);
+    }
+
     /**
      * Helper for tests
      */
     public function withHit(bool $hit): self {
-        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag, $this->lastModified);
+        $ret = new self($this->body, $this->responseCode, $this->headers, $hit, $this->file, $this->etag, $this->lastModified, $this->responseTimestamp, $this->resourceTimestamp);
         return $ret;
+    }
+
+    /**
+     * Testing helper
+     */
+    public function unify(self $resp): self {
+        return new self(
+            $this->body,
+            $this->responseCode,
+            $this->headers,
+            $this->hit,
+            $this->file,
+            $this->etag,
+            $resp->lastModified,
+            $resp->responseTimestamp,
+            $resp->resourceTimestamp
+        );
     }
 
     /**
      * Helper for tests
      */
     public function withLastModified(string $lastModified): self {
-        $ret = new self($this->body, $this->responseCode, $this->headers, $this->hit, $this->file, $this->etag, $lastModified);
+        $ret = new self($this->body, $this->responseCode, $this->headers, $this->hit, $this->file, $this->etag, $lastModified, $this->responseTimestamp, $this->resourceTimestamp);
         return $ret;
     }
 
@@ -162,5 +208,27 @@ class ResponseCacheItem {
             hash_update($hash, (string) fread($file, self::OUTPUT_CHUNK));
         }
         return hash_final($hash);
+    }
+
+    /**
+     * Automatically detects if it makes sense to compress the output
+     * based on the response format provided in the conte-type response header.
+     */
+    private function getCompressFromContentTypeHeader(): bool {
+        foreach ($this->headers as $k => $v) {
+            if (strtolower($k) == 'content-type') {
+                if (!is_string($v)) {
+                    throw new ServiceException("Multiple Content-Type response headers", 500);
+                }
+                $noCompression = new Accept(self::NO_COMPRESSION);
+                try {
+                    $noCompression->getBestMatch([$v]);
+                    return false;
+                } catch (NoMatchException) {
+                    return true;
+                }
+            }
+        }
+        return true;
     }
 }

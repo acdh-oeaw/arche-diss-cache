@@ -54,7 +54,7 @@ class RepoResourceCacheItemTest extends \PHPUnit\Framework\TestCase {
         ]);
         $res->setGraph($dataset);
 
-        $res = RepoResourceCacheItem::deserialize(RepoResourceCacheItem::serialize($res));
+        $res = RepoResourceCacheItem::deserialize(RepoResourceCacheItem::serialize($res), '2026-06-11 13:18:24');
         $this->assertTrue($dataset->equals($res->getGraph()->getDataset()));
     }
 

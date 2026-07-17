@@ -3,7 +3,7 @@
 /*
  * The MIT License
  *
- * Copyright 2024 zozlak.
+ * Copyright 2026 zozlak.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -26,27 +26,16 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
-use DateTimeImmutable;
-
 /**
- * Description of CacheItem
+ * Description of ForbiddenException
  *
  * @author zozlak
  */
-class CacheItem {
+class ForbiddenException extends \acdhOeaw\arche\lib\exception\RepoLibException {
 
-    public int $id;
-    public string $created;
-    public string $value;
-
-    /**
-     * Returns cache item's age in seconds
-     */
-    public function getAge(): int {
-        return time() - $this->getCreatedTimestamp();
-    }
-
-    public function getCreatedTimestamp(): int {
-        return (new DateTimeImmutable($this->created))->getTimestamp();
+    public function __construct(string $message = "Forbidden\n",
+                                int $code = 403,
+                                \Throwable | null $previous = null) {
+        parent::__construct($message, $code, $previous);
     }
 }

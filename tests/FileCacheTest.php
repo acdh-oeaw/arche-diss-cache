@@ -26,6 +26,11 @@
 
 namespace acdhOeaw\arche\lib\dissCache;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
+use acdhOeaw\arche\lib\Repo;
+use acdhOeaw\arche\lib\RepoResource;
+
 /**
  * Description of FileCacheTest
  *
@@ -36,6 +41,7 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
     const CACHE_DIR  = '/tmp/__cachefile__';
     const RES_BINARY = 'https://arche.acdh.oeaw.ac.at/api/1447709';
     const RES_META   = 'https://arche.acdh.oeaw.ac.at/api/1441225';
+    const MIME_PROP  = 'https://vocabs.acdh.oeaw.ac.at/schema#hasFormat';
     const MB         = 1048576;
 
     public function setUp(): void {
@@ -48,10 +54,11 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         parent::tearDown();
 
         system('rm -fR "' . self::CACHE_DIR . '"');
+        unset($_SERVER['AUTHORIZATION']);
     }
 
     public function testGetRefFilePathBinary(): void {
-        $cache   = new FileCache(self::CACHE_DIR);
+        $cache   = new FileCache(self::CACHE_DIR, new AuthConfig(''));
         $refPath = self::CACHE_DIR . '/' . hash('xxh128', self::RES_BINARY) . '/' . FileCache::REF_FILE_NAME;
 
         // no mime check
@@ -80,7 +87,7 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testGetRefFilePathMeta(): void {
-        $cache   = new FileCache(self::CACHE_DIR);
+        $cache   = new FileCache(self::CACHE_DIR, new AuthConfig(''));
         $refPath = self::CACHE_DIR . '/' . hash('xxh128', self::RES_META) . '/' . FileCache::REF_FILE_NAME;
 
         // no mime check
@@ -110,7 +117,7 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
                 'level' => 1
             ],
         ];
-        $cache    = new FileCache(self::CACHE_DIR, null, $localCfg);
+        $cache    = new FileCache(self::CACHE_DIR, new AuthConfig(''), null, $localCfg);
         $refPath  = sprintf('%s/%02d/%s', self::CACHE_DIR, ((int) basename(self::RES_BINARY)) % 100, basename(self::RES_BINARY));
         mkdir(dirname($refPath), 0700, true);
 
@@ -132,8 +139,57 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
         }
     }
 
+    public function testGetResourceBinaryPath(): void {
+        // with the AuthConfigDouble it would be possible to create a mock
+        // but it was decided to implement it as an integration test
+        $repo     = Repo::factoryFromUrl(self::RES_BINARY);
+        $res      = new RepoResource(self::RES_BINARY, $repo);
+        $cache    = new FileCache(self::CACHE_DIR, new AuthConfig(''), null, [], 1, self::MIME_PROP);
+        $filePath = $cache->getResourceBinaryPath($res);
+        $this->assertFileExists($filePath);
+        $this->assertEquals(file_get_contents(self::RES_BINARY), file_get_contents($filePath));
+    }
+
+    public function testGetResourceBinaryPathAuth(): void {
+        $resUrl      = 'https://arche.acdh.oeaw.ac.at/api/346696';
+        $refContent  = "UTF-8";
+        $localAccess = [];
+        $repo        = Repo::factoryFromUrl(self::RES_BINARY);
+        $res         = new RepoResource($resUrl, $repo);
+        $auth        = [getenv('ARCHE_LOGIN'), getenv('ARCHE_PSWD') ?: ''];
+        if (empty($auth[0])) {
+            return;
+        }
+
+        // make sure it's a restricted resource
+        $this->assertEmpty(@file_get_contents($resUrl));
+
+        $authConfig = new AuthConfig('', passBasicAuth: false, defaultAuth: $auth);
+        $cache      = new FileCache(self::CACHE_DIR, $authConfig, null, $localAccess, 1, self::MIME_PROP);
+        $filePath   = $cache->getResourceBinaryPath($res);
+        $this->assertFileExists($filePath);
+        $this->assertEquals($refContent, file_get_contents($filePath));
+        unlink($filePath);
+
+        // make sure we don't have access
+        $authConfig = new AuthConfig('', passBasicAuth: true, defaultAuth: ['', '']);
+        $cache      = new FileCache(self::CACHE_DIR, $authConfig, null, $localAccess, 1, self::MIME_PROP);
+        try {
+            $cache->getResourceBinaryPath($res);
+        } catch (FileCacheException $e) {
+            $this->assertEquals(FileCacheException::FORBIDDEN, $e->getCode());
+        }
+
+        // pass the auth
+        $_SERVER['AUTHORIZATION'] = 'basic ' . base64_encode(implode(':', $auth));
+        $filePath                 = $cache->getResourceBinaryPath($res);
+        $this->assertFileExists($filePath);
+        $this->assertEquals($refContent, file_get_contents($filePath));
+        unlink($filePath);
+    }
+
     public function testMintPath(): void {
-        $cache = new FileCache(self::CACHE_DIR);
+        $cache = new FileCache(self::CACHE_DIR, new AuthConfig(''));
 
         $path = $cache->mintPath();
         $this->assertEquals(self::CACHE_DIR, dirname($path));
@@ -145,7 +201,7 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testClean(): void {
-        $cache = new FileCache(self::CACHE_DIR);
+        $cache = new FileCache(self::CACHE_DIR, new AuthConfig(''));
 
         file_put_contents(self::CACHE_DIR . '/1MB', str_repeat('0', self::MB));
         file_put_contents(self::CACHE_DIR . '/2MB', str_repeat('0', self::MB * 2));
@@ -186,17 +242,19 @@ class FileCacheTest extends \PHPUnit\Framework\TestCase {
 
     public function testTooLarge(): void {
         $url   = 'https://zozlak.org/zdjecia/2025-07-06%20Western%20Alps/07%20Tacul/20250710_080404572_HDR.jpg';
-        $cache = new FileCache(self::CACHE_DIR);
-        $path  = $cache->getRefFilePath($url, '', [], 0.3);
+        $cache = new FileCache(self::CACHE_DIR, new AuthConfig(''), maxDwnldSizeMB: 0.3);
+        $path  = $cache->getRefFilePath($url, '');
         $this->assertFileExists($path);
         unlink($path);
+
+        $cache = new FileCache(self::CACHE_DIR, new AuthConfig(''), maxDwnldSizeMB: 0.1);
         $this->expectException(FileCacheException::class);
         $this->expectExceptionCode(FileCacheException::TOO_LARGE);
-        $cache->getRefFilePath($url, '', [], 0.1);
+        $cache->getRefFilePath($url, '');
     }
 
     public function testNoFile(): void {
-        $cache = new FileCache(self::CACHE_DIR);
+        $cache = new FileCache(self::CACHE_DIR, new AuthConfig(''));
         $url   = 'https://zozlak.org/zdjecia/foobar.jpg';
         $this->expectException(FileCacheException::class);
         $this->expectExceptionCode(FileCacheException::NO_FILE);

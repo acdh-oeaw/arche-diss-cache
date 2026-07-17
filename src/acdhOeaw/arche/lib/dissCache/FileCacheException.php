@@ -33,7 +33,9 @@ namespace acdhOeaw\arche\lib\dissCache;
  */
 class FileCacheException extends \Exception {
 
-    const NO_BINARY = 1;
-    const NO_FILE   = 2;
-    const TOO_LARGE = 3;
+    const NO_BINARY    = 1;
+    const NO_FILE      = 2;
+    const TOO_LARGE    = 3;
+    const UNAUTHORIZED = 4;
+    const FORBIDDEN    = 5;
 }
