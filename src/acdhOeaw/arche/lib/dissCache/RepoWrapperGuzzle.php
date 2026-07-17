@@ -99,9 +99,8 @@ class RepoWrapperGuzzle implements RepoWrapperInterface {
     private function resolve(string $id): string {
         $resp = $this->client->send(new Request('HEAD', $id));
         $code = $resp->getStatusCode();
-        if ($code === 401) {
-            throw new UnauthorizedException();
-        } elseif ($code !== 200) {
+        // 401 is also ok - we are just trying to resolve, not to read the resource
+        if (!in_array($code, [200, 401])) {
             throw new NotFound("$id can not be resolved (HTTP status code $code)", $code);
         }
         $redirects = $resp->getHeader('X-Guzzle-Redirect-History');
