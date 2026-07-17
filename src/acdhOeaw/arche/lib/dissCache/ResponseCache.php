@@ -249,22 +249,26 @@ class ResponseCache implements CallbackContextInterface {
     private function checkAuth(RepoResourceInterface $res): void {
         $authCfg = $this->authConfig;
         if ($authCfg === null) {
+            $this->log?->info("Skipping auth check - authorization not configured");
             return;
         }
 
         $tmpl  = new PT($authCfg->aclReadProperty);
         $roles = $res->getGraph()->listObjects($tmpl)->getValues();
         if (!empty($authCfg->publicRole) && in_array($authCfg->publicRole, $roles)) {
+            $this->log?->info("Public resource");
             return;
         }
 
         $repoBaseUrl = (string) preg_replace('/[0-9]+$/', '', (string) $res->getUri());
         $clientRoles = $this->getClientRoles($repoBaseUrl);
+        $this->log?->info("Resource roles (" . implode(', ', $roles) . ") client roles (" . implode($clientRoles) . ")");
         if (count($clientRoles) === 0) {
             throw new UnauthorizedException();
         }
 
         if (!empty($authCfg->adminRole) && in_array($authCfg->adminRole, $clientRoles)) {
+            $this->log?->info("Client is an admin");
             return;
         }
         if (count(array_intersect($clientRoles, $roles)) > 0) {
