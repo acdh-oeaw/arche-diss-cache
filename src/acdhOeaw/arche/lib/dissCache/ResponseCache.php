@@ -59,10 +59,12 @@ class ResponseCache {
     private int $ttlResource;
     private int $hardTtlResource;
     private AuthConfig | null $authConfig = null;
+    private FileCache | null $fileCache   = null;
     private int $ttlResponse;
     private SearchConfig $searchCfg;
     private LoggerInterface | null $log;
     private string $lastResponseKey;
+    private bool $noCache;
 
     /**
      * 
@@ -75,12 +77,14 @@ class ResponseCache {
                                 array $repos, ?SearchConfig $config = null,
                                 ?LoggerInterface $log = null,
                                 ?int $hardTtlResource = null,
-                                ?AuthConfig $authConfig = null) {
+                                ?AuthConfig $authConfig = null,
+                                ?FileCache $fileCache = null) {
         $this->cache           = $cache;
         $this->missHandler     = $missHandler;
         $this->ttlResource     = $ttlResource;
         $this->hardTtlResource = $hardTtlResource ?? $ttlResource * self::HARD_TTL_MULTIPLIER;
         $this->authConfig      = $authConfig;
+        $this->fileCache       = $fileCache;
         $this->ttlResponse     = $ttlResponse;
         $this->repos           = $repos;
         $this->searchCfg       = $config ?? new SearchConfig();
@@ -183,7 +187,8 @@ class ResponseCache {
         // finally generate the response
         $this->log?->info("Generating the response");
         try {
-            $value = ($this->missHandler)($res, $params, $noCache);
+            $this->noCache = $noCache;
+            $value         = ($this->missHandler)($res, $params, $this);
             $this->log?->info("Caching the response under a key $this->lastResponseKey");
             $this->cache->set([$this->lastResponseKey], $value->serialize(), null);
         } finally {
@@ -224,6 +229,21 @@ class ResponseCache {
         foreach ($resKeys as $key) {
             $this->cache->delete("%$key");
         }
+    }
+
+    public function getLog(): LoggerInterface | null {
+        return $this->log;
+    }
+
+    public function getFileCache(): FileCache {
+        if ($this->fileCache === null) {
+            throw new FileCacheException('FileCache object not initialized - check the service configuration.');
+        }
+        return $this->fileCache;
+    }
+
+    public function getNoCache(): bool {
+        return $this->noCache;
     }
 
     private function checkAuth(RepoResourceInterface $res): void {
@@ -288,7 +308,7 @@ class ResponseCache {
                 }
             }
             if ($failed) {
-                $client = $this->authConfig->getClient([$user, $pswd]);
+                $client = $this->authConfig->getClient(['auth' => [$user, $pswd]]);
                 $resp   = $client->send(new Request('GET', $authUrl));
                 if ($resp->getStatusCode() === 200) {
                     $userRoles   = json_decode((string) $resp->getBody())->groups;

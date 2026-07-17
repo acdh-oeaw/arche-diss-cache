@@ -41,13 +41,36 @@ class AuthConfig {
     const DEFAULT_AUTH_TTL  = 60;
     const DEFAULT_PSWD_COST = 10;
 
+    static public function fromConfig(object $config): self {
+        if (!isset($config->aclReadProperty)) {
+            throw new \RuntimeException("aclReadProperty config property missing");
+        }
+        return new self(
+            $config->aclReadProperty,
+            $config->publicRole ?? '',
+            $config->academicRole ?? '',
+            $config->roleTrustedHeader ?? '',
+            $config->adminRole ?? '',
+            $config->ttl ?? self::DEFAULT_AUTH_TTL,
+            $config->passwordCost ?? self::DEFAULT_PSWD_COST,
+            $config->passBasicAuth ?? false,
+            $config->defaultAuth ?? ['', '']
+        );
+    }
+
+    /**
+     * 
+     * @param array{0: string, 1:string} $defaultAuth
+     */
     public function __construct(readonly string $aclReadProperty,
                                 readonly string $publicRole = '',
                                 readonly string $academicRole = '',
                                 readonly string $roleTrustedHeader = '',
                                 readonly string $adminRole = '',
                                 readonly int $authTtl = self::DEFAULT_AUTH_TTL,
-                                readonly int $passwordCost = self::DEFAULT_PSWD_COST) {
+                                readonly int $passwordCost = self::DEFAULT_PSWD_COST,
+                                readonly bool $passBasicAuth = false,
+                                readonly array $defaultAuth = ['', '']) {
         ;
     }
 
@@ -70,10 +93,28 @@ class AuthConfig {
     }
 
     /**
+     * Returns a guzzle client setting the HTTP basic authorization:
+     * - if non-empty credentials are passed as a parameter, they are used as they are
+     * - otherwise if $this->passBasicAuth is set, the request HTTP basic credentials
+     *   are used (also if they are not set or empty)
+     * - otherwise $this->defaultAuth credentials are used (also if they are empty)
      * 
-     * @param array{0: string, 1:string} $auth
+     * @param array<string, mixed> $guzzleOpts
      */
-    public function getClient(array $auth): Client {
-        return ProxyClient::factory(['auth' => $auth, 'http_errors' => false]);
+    public function getClient(array $guzzleOpts = []): Client {
+        /** @phpstan-ignore isset.offset */
+        if (isset($guzzleOpts[0])) {
+            throw new \RuntimeException('guzzleOpts parameter should be an array<string, mixed>, array<int, mixed> passed');
+        }
+        $guzzleAuth = $this->defaultAuth;
+        if ($this->passBasicAuth) {
+            $guzzleAuth = $this->getUserPswd();
+        }
+        if (!empty($guzzleOpts['auth'][0])) {
+            $guzzleAuth = $guzzleOpts['auth'];
+        }
+        $guzzleOpts['auth']        = $guzzleAuth;
+        $guzzleOpts['http_errors'] = false;
+        return ProxyClient::factory($guzzleOpts);
     }
 }

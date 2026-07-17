@@ -43,6 +43,7 @@ class AuthConfigDouble extends AuthConfig {
      */
     public array $userPswd           = ['', ''];
     public string $trustedHeaderRole = '';
+
     public Client $client;
 
     /**
@@ -59,9 +60,9 @@ class AuthConfigDouble extends AuthConfig {
 
     /**
      * 
-     * @param array{0: string, 1:string} $auth
+     * @param array<string, mixed> $guzzleOpts
      */
-    public function getClient(array $auth): Client {
+    public function getClient(array $guzzleOpts = []): Client {
         return $this->client;
     }
 }

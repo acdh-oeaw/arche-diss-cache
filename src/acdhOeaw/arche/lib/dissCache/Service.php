@@ -34,25 +34,7 @@ use acdhOeaw\arche\lib\exception\NotFound;
 /**
  * Wrapper handling boilerplate code around the ARCHE microservice initialization
  * 
- * Requires following config file structure:
- * ```
- * dissCacheService:
- *   db: sqlite:/some/path
- *   log:
- *     file: /some/path
- *     level: debug
- *    ttl:
- *      resource: 3600
- *      response: 31536000
- *    repoDb:
- *    - repoConfigPath.yaml
- *    allowedNmsp:
- *    - https://one
- *    - https://another
- *    metadataMode: parents
- *    parentProperty: ""
- *    resourceProperties: []
- *    relativesProperties: []
+ * See the tests/config.yaml for the required config file structure.
  * ```
  * @author zozlak
  */
@@ -164,18 +146,13 @@ class Service {
 
             $authConfig = null;
             if (isset($cfg->auth)) {
-                $auth          = $cfg->auth;
-                $aclRead       = $auth->aclReadProperty;
-                $public        = $auth->publicRole ?? '';
-                $academic      = $auth->academicRole ?? '';
-                $trustedHeader = $auth->roleTrustedHeader ?? '';
-                $adminRole     = $auth->adminRole ?? '';
-                $authTtl       = $auth->ttl ?? AuthConfig::DEFAULT_AUTH_TTL;
-                $pswdCost      = $auth->passwordCost ?? AuthConfig::DEFAULT_PSWD_COST;
-                $authConfig    = new AuthConfig($aclRead, $public, $academic, $trustedHeader, $adminRole, $authTtl, $pswdCost);
+                $authConfig    = AuthConfig::fromConfig($cfg->auth);
             }
-
-            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null, $authConfig);
+            $fileCache = null;
+            if (isset($this->config->fileCache)) {
+                $fileCache = FileCache::fromConfig($this->config->fileCache, $this->log, $authConfig);
+            }
+            $cache = new ResponseCache($this->cacheDb, $this->clbck, $cfg->ttl->resource, $cfg->ttl->response, $repos, $sc, $this->log, $cfg->ttl->hardResource ?? null, $authConfig, $fileCache);
             unset($repos);
 
             $response = $cache->getResponse($param, $id, $noCache);

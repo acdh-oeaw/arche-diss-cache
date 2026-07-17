@@ -9,6 +9,8 @@ dissCacheService:
   ttl:
     resource: 3600
     response: 31536000
+  # maximum number of cache entries
+  maxCount: 100000
   # list of repository configuration files for direct database connection
   # those config files are created by the https://github.com/acdh-oeaw/arche_cicd_start_action
   repoDb: []
@@ -32,3 +34,15 @@ auth:
   ttl: 300
   # see https://www.php.net/manual/en/function.password-hash.php
   passwordCost: 10
+  passBasicAuth: false
+  defaultAuth: ['', '']
+# FileCache settings
+fileCache:
+  dir: /tmp/cache
+  maxDownloadSizeMb: 100
+  localAccess: []
+  mimeProperty: https://vocabs.acdh.oeaw.ac.at/schema#hasFormat
+  # used only by the cache cleaning API
+  maxSizeMb: 1000
+  # used only by the cache cleaning API
+  clearMode: time  

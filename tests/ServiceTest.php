@@ -76,7 +76,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testService(): void {
-        $clbck = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service = new Service(__DIR__ . '/config.yaml');
@@ -102,7 +102,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testCacheError(): void {
-        $clbck = function (RepoResourceInterface $res, array $params): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $params, ResponseCache $cache): ResponseCacheItem {
             throw new ServiceException('foo', 456, null, ['custom' => 'header']);
         };
         $service    = new Service(__DIR__ . '/config.yaml');
@@ -130,7 +130,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     public function testClearCache(): void {
         $param   = [];
         $headers = ['Cache-Control' => 'max-age=3600, must-revalidate, immutable'];
-        $clbck   = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
+        $clbck   = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service = new Service(__DIR__ . '/config.yaml');
@@ -160,7 +160,7 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testTtl(): void {
-        $clbck = function (RepoResourceInterface $res, array $param): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service  = new Service(__DIR__ . '/config.yaml');

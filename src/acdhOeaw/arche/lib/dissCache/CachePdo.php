@@ -49,7 +49,7 @@ class CachePdo implements CacheInterface {
 
         $this->lockPath = sys_get_temp_dir() . '/cachePdo_' . ($cacheId ?? hash('xxh128', $connString));
 
-        $this->maintainDb();
+        $this->maintainDb($connString === 'sqlite::memory:');
     }
 
     public function get(string $key): CacheItem | false {
@@ -103,8 +103,45 @@ class CachePdo implements CacheInterface {
         $query->execute([$keyLike]);
     }
 
-    private function maintainDb(): void {
-        if (!file_exists($this->lockPath)) {
+    public function prune(int $maxAge, int $maxCount): int {
+        $removed = 0;
+        $ageExp  = 'unixepoch(current_timestamp) - unixepoch(created)';
+
+        $query = $this->pdo->prepare("SELECT count(*) FROM vals");
+        $query->execute([]);
+        $count = (int) $query->fetchColumn();
+
+        $this->pdo->beginTransaction();
+
+        if ($count > $maxCount) {
+            $removed = $count - $maxCount;
+            $query   = $this->pdo->prepare("
+                CREATE TEMPORARY TABLE _todel AS
+                SELECT id FROM vals ORDER BY $ageExp DESC, id LIMIT ?
+            ");
+            $query->execute([$removed]);
+            $this->pdo->query("DELETE FROM keys WHERE id IN (SELECT id FROM _todel)");
+            $this->pdo->query("DELETE FROM vals WHERE id IN (SELECT id FROM _todel)");
+        }
+
+        $query   = $this->pdo->prepare("
+            DELETE FROM keys WHERE id IN (
+                SELECT id FROM vals WHERE $ageExp > CAST(? AS int)
+            )
+        ");
+        $query->execute([$maxAge]);
+        $query   = $this->pdo->prepare("
+            DELETE FROM vals WHERE $ageExp > CAST(? AS int)
+        ");
+        $query->execute([$maxAge]);
+        $removed += $query->rowCount();
+
+        $this->pdo->commit();
+        return $removed;
+    }
+
+    private function maintainDb(bool $inMemory): void {
+        if ($inMemory || !file_exists($this->lockPath)) {
             $this->pdo->query("
                 CREATE TABLE IF NOT EXISTS keys (
                     key text primary key not null,
@@ -117,10 +154,12 @@ class CachePdo implements CacheInterface {
                     id integer primary key not null,
                     created timestamp not null,
                     value text not null
-                )
-            ");
+                ) 
+           ");
 
-            file_put_contents($this->lockPath, "");
+            if (!$inMemory) {
+                file_put_contents($this->lockPath, "");
+            }
         }
     }
 }
