@@ -106,7 +106,8 @@ class FileCache {
      *   Passing an empty value skips the check.
      *   
      */
-    public function getRefFilePath(string $resUrl, string $expectedMime = ''): string {
+    public function getRefFilePath(string $resUrl, string $expectedMime = '',
+                                   bool $noCache = false): string {
         // direct local access
         foreach ($this->localAccess as $nmsp => $nmspCfg) {
             if (str_starts_with($resUrl, $nmsp)) {
@@ -131,18 +132,19 @@ class FileCache {
 
         // cache access
         $path = $this->dir . '/' . hash(ResponseCacheItem::ETAG_HASH, $resUrl) . '/ref';
-        if (!file_exists($path)) {
+        if ($noCache || !file_exists($path)) {
             $this->fetchResourceBinary($path, $resUrl, $expectedMime);
         }
         return $path;
     }
 
-    public function getResourceBinaryPath(RepoResourceInterface $res): string {
+    public function getResourceBinaryPath(RepoResourceInterface $res,
+                                          bool $noCache = false): string {
         $mime = (string) $res->getGraph()->getObject(new PT($this->mimeProperty));
         if (empty($mime)) {
             throw new FileCacheException('Resource has no mime type', FileCacheException::NO_BINARY);
         }
-        return $this->getRefFilePath((string) $res->getUri(), $mime);
+        return $this->getRefFilePath((string) $res->getUri(), $mime, $noCache);
     }
 
     /**
