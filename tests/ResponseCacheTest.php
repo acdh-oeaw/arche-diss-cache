@@ -149,7 +149,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
 
         unlink(self::$logPath);
         $refLog1 = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nInvalidating resource's cache (resLastMod - resCacheCreation = ";
-        $refLog2 = "\nFetching the resource\nUpdating response key to 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nCaching the resource\n";
+        $refLog2 = "\nFetching the resource\nSkipping auth check - authorization not configured\nUpdating response key to 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nCaching the resource\n";
         $resp    = $respCache->getResponse($params, $resUrl);
         $this->assertStringStartsWith($refLog1, (string) file_get_contents(self::$logPath));
         $this->assertStringEndsWith($refLog2, (string) file_get_contents(self::$logPath));
@@ -196,7 +196,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
         $refResp = $this->checkFirstResponse($respCache, $params, $resUrl, $refResp);
 
         unlink(self::$logPath);
-        $refLog = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\n";
+        $refLog = "Checking cache for resource $resUrl and response key $paramsHash\nResource found in cache (diffRes 0, resTtl 0)\nKeeping resource's cache (resLastMod - resCacheCreation = -10)\nSkipping auth check - authorization not configured\nRegenerating response (respDiff 0, respTtl 0)\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\n";
         $resp   = $respCache->getResponse($params, $resUrl);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
         $this->assertEquals($refResp, $resp);
@@ -538,7 +538,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
                                         string $resUrl,
                                         ResponseCacheItem $refResp): ResponseCacheItem {
         $paramsHash = $respCache->hashParams($params, $resUrl);
-        $refLog     = "Checking cache for resource $resUrl and response key $paramsHash\nFetching the resource\nUpdating response key to 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nCaching the resource\n";
+        $refLog     = "Checking cache for resource $resUrl and response key $paramsHash\nFetching the resource\nSkipping auth check - authorization not configured\nUpdating response key to 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nGenerating the response\nCaching the response under a key 58326945f389775660e59287a9843ad9_https://arche.acdh.oeaw.ac.at/api/1238\nCaching the resource\n";
         $resp       = $respCache->getResponse($params, $resUrl);
         $refResp    = $refResp->unify($resp);
         $this->assertEquals($refLog, file_get_contents(self::$logPath));
