@@ -145,8 +145,8 @@ class Service {
             $sc->relativesProperties    = $cfg->relativesProperties ?? [];
 
             $authConfig = null;
-            if (isset($cfg->auth)) {
-                $authConfig    = AuthConfig::fromConfig($cfg->auth);
+            if (isset($this->config->auth)) {
+                $authConfig    = AuthConfig::fromConfig($this->config->auth);
             }
             $fileCache = null;
             if (isset($this->config->fileCache)) {
