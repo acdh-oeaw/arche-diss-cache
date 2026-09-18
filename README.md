@@ -25,6 +25,7 @@ use acdhOeaw\arche\lib\RepoResourceInterface;
 use acdhOeaw\arche\lib\dissCache\Service;
 use acdhOeaw\arche\lib\dissCache\ResponseCache;
 use acdhOeaw\arche\lib\dissCache\ResponseCacheItem;
+use acdhOeaw\arche\lib\dissCache\CallbackContextInterface;
 
 
 class MyClass {
@@ -53,11 +54,15 @@ The sample YAML config file can be found in `tests/config.yaml`.
 ### Getting access to the logger
 
 ```php
+// @var acdhOeaw\arche\lib\dissCache\CallbackContextInterface $context
+$cache = $context->getFileCache();
 $cache->getLog()
 ```
 
 ### Getting acces to the repository resource binary content
 
 ```php
+// @var acdhOeaw\arche\lib\dissCache\CallbackContextInterface $context
+$cache = $context->getFileCache();
 $pathToFile = $cache->getFileCache()->getResourceBinaryPath($res);
 ```
