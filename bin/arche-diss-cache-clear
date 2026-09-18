@@ -50,10 +50,10 @@ $log = new Log('php://stdout');
 
 if ($argc === 2) {
     $config = yaml_parse_file($argv[1]);
-    if (isset($config['cache'])) {
-        $dir     = $config['cache']['dir'];
-        $maxSize = $config['cache']['maxSizeMb'];
-        $mode    = $config['cache']['clearMode'];
+    if (isset($config['fileCache'])) {
+        $dir     = $config['fileCache']['dir'];
+        $maxSize = $config['fileCache']['maxSizeMb'];
+        $mode    = $config['fileCache']['clearMode'];
     }
     if (isset($config['dissCacheService'])) {
         $dbConnStr = $config['dissCacheService']['db'];
