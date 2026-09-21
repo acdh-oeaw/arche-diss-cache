@@ -31,11 +31,11 @@ namespace acdhOeaw\arche\lib\dissCache;
  *
  * @author zozlak
  */
-class FileCacheException extends \Exception {
+class FileCacheException extends ServiceException {
 
-    const NO_BINARY    = 1;
-    const NO_FILE      = 2;
-    const TOO_LARGE    = 3;
-    const UNAUTHORIZED = 4;
-    const FORBIDDEN    = 5;
+    const NO_FILE      = 1;
+    const NO_BINARY    = 422;
+    const TOO_LARGE    = 413;
+    const UNAUTHORIZED = 401;
+    const FORBIDDEN    = 403;
 }

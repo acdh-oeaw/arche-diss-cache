@@ -227,6 +227,6 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         $service->setCallback($clbck);
         $response = $service->serveRequest($uri, [], true);
         $this->assertEquals(500, $response->responseCode);
-        $this->assertEquals("Internal Server Error\n", $response->body);
+        $this->assertEquals("Bar\n", $response->body);
     }
 }

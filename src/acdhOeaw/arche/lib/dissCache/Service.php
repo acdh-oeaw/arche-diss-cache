@@ -160,9 +160,6 @@ class Service {
             $this->log->info("Ended in " . round(microtime(true) - $t0, 3) . " s");
             return $response;
         } catch (\Throwable $e) {
-            if ($e instanceof FileCacheException) {
-                $e = $this->castFileCacheException($e);
-            }
             $response = $this->processException($e);
             if ($e instanceof ServiceException && ($cache ?? null) instanceof ResponseCache) {
                 $key = (string) $cache->getLastResponseKey();
@@ -201,14 +198,4 @@ class Service {
         $response->headers['Cache-Control'] = "max-age=$ttl, must-revalidate, immutable";
     }
 
-    private function castFileCacheException(FileCacheException $e): ServiceException | FileCacheException {
-        return match ($e->getCode()) {
-            FileCacheException::TOO_LARGE => new ServiceException("Request entity too large\n", 413),
-            FileCacheException::NO_BINARY => new ServiceException("Unprocessable content\n", 422),
-            FileCacheException::NO_FILE => new ServiceException($e->getMessage(), 500),
-            FileCacheException::UNAUTHORIZED => new ServiceException("Unauthorized\n", 401),
-            FileCacheException::FORBIDDEN => new ServiceException("Forbidden\n", 403),
-            default => $e,
-        };
-    }
 }
