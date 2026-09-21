@@ -86,7 +86,8 @@ if (isset($dir) && isset($maxSize) && isset($mode)) {
 
 if (isset($dbConnStr) && isset($maxAge) && isset($maxCount)) {
     $cache   = new CachePdo($dbConnStr);
-    $removed = $cache->prune($maxAge, $maxCount);
+    list($removed, $count) = $cache->prune($maxAge, $maxCount);
+    $log->info("Metadata cache size $count, limit $maxCount, max age $maxAge");
     $log->info("$removed metadata entries removed");
 }
 
