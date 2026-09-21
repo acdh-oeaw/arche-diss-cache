@@ -76,7 +76,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testService(): void {
-        $clbck = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $param,
+                           ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service = new Service(__DIR__ . '/config.yaml');
@@ -102,7 +103,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testCacheError(): void {
-        $clbck = function (RepoResourceInterface $res, array $params, ResponseCache $cache): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $params,
+                           ResponseCache $cache): ResponseCacheItem {
             throw new ServiceException('foo', 456, null, ['custom' => 'header']);
         };
         $service    = new Service(__DIR__ . '/config.yaml');
@@ -130,7 +132,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     public function testClearCache(): void {
         $param   = [];
         $headers = ['Cache-Control' => 'max-age=3600, must-revalidate, immutable'];
-        $clbck   = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
+        $clbck   = function (RepoResourceInterface $res, array $param,
+                             ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service = new Service(__DIR__ . '/config.yaml');
@@ -160,7 +163,8 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
     }
 
     public function testTtl(): void {
-        $clbck = function (RepoResourceInterface $res, array $param, ResponseCache $cache): ResponseCacheItem {
+        $clbck = function (RepoResourceInterface $res, array $param,
+                           ResponseCache $cache): ResponseCacheItem {
             return new ResponseCacheItem((string) $res->getUri(), 200, $param, false);
         };
         $service  = new Service(__DIR__ . '/config.yaml');
@@ -175,5 +179,54 @@ class ServiceTest extends \PHPUnit\Framework\TestCase {
         sleep(1);
         $response = $service->serveRequest('https://id.acdh.oeaw.ac.at/oeaw', $param);
         $this->assertEquals($refTtl - 1, $response->getTtl($config->resource, $config->response));
+    }
+
+    public function testFileCacheExceptionMapping(): void {
+        $uri     = 'https://id.acdh.oeaw.ac.at/oeaw';
+        $service = new Service(__DIR__ . '/config.yaml');
+
+        $clbck = function ($x, $y, $z): ResponseCacheItem {
+            throw new FileCacheException("", FileCacheException::UNAUTHORIZED);
+        };
+        $service->setCallback($clbck);
+        $response = $service->serveRequest($uri, [], true);
+        $this->assertEquals(401, $response->responseCode);
+
+        $clbck = function ($x, $y, $z): ResponseCacheItem {
+            throw new FileCacheException("", FileCacheException::FORBIDDEN);
+        };
+        $service->setCallback($clbck);
+        $response = $service->serveRequest($uri, [], true);
+        $this->assertEquals(403, $response->responseCode);
+
+        $clbck = function ($x, $y, $z): ResponseCacheItem {
+            throw new FileCacheException("", FileCacheException::TOO_LARGE);
+        };
+        $service->setCallback($clbck);
+        $response = $service->serveRequest($uri, [], true);
+        $this->assertEquals(413, $response->responseCode);
+
+        $clbck = function ($x, $y, $z): ResponseCacheItem {
+            throw new FileCacheException("", FileCacheException::NO_BINARY);
+        };
+        $service->setCallback($clbck);
+        $response = $service->serveRequest($uri, [], true);
+        $this->assertEquals(422, $response->responseCode);
+        
+        $clbck = function ($x, $y, $z): ResponseCacheItem {
+            throw new FileCacheException("Foo", FileCacheException::NO_FILE);
+        };
+        $service->setCallback($clbck);
+        $response = $service->serveRequest($uri, [], true);
+        $this->assertEquals(500, $response->responseCode);
+        $this->assertEquals("Foo\n", $response->body);
+        
+        $clbck = function ($x, $y, $z): ResponseCacheItem {
+            throw new FileCacheException("Bar", 12345);
+        };
+        $service->setCallback($clbck);
+        $response = $service->serveRequest($uri, [], true);
+        $this->assertEquals(500, $response->responseCode);
+        $this->assertEquals("Internal Server Error\n", $response->body);
     }
 }
