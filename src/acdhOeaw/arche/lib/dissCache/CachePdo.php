@@ -103,7 +103,10 @@ class CachePdo implements CacheInterface {
         $query->execute([$keyLike]);
     }
 
-    public function prune(int $maxAge, int $maxCount): int {
+    /**
+     * @return array{0:int, 1:int}
+     */
+    public function prune(int $maxAge, int $maxCount): array {
         $removed = 0;
         $ageExp  = 'unixepoch(current_timestamp) - unixepoch(created)';
 
@@ -137,7 +140,7 @@ class CachePdo implements CacheInterface {
         $removed += $query->rowCount();
 
         $this->pdo->commit();
-        return $removed;
+        return [$removed, $count];
     }
 
     private function maintainDb(bool $inMemory): void {
