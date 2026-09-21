@@ -162,7 +162,7 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
 
         // don't remove anything
         $count = $cache->prune(10, 10);
-        $this->assertEquals(0, $count);
+        $this->assertEquals([0, 10], $count);
         foreach ($data as $i) {
             $this->assertIsObject($cache->get($i . '_1'), $i);
             $this->assertIsObject($cache->get($i . '_2'), $i);
@@ -170,7 +170,7 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
 
         // remove by count
         $count = $cache->prune(10, 7);
-        $this->assertEquals(3, $count);
+        $this->assertEquals([3, 10], $count);
         foreach ($data as $i) {
             if ((int) $i <= 3) {
                 $this->assertFalse($cache->get($i . '_1'), $i);
@@ -187,7 +187,7 @@ class CachePdoTest extends \PHPUnit\Framework\TestCase {
             $cache->set([$i . '_1', $i . '_2'], $i, (int) $i);
         }
         $count = $cache->prune(1, 10);
-        $this->assertEquals(7, $count);
+        $this->assertEquals([7, 10], $count);
         foreach ($data as $i) {
             if ((int) $i <= 3) {
                 $this->assertIsObject($cache->get($i . '_1'), $i);
