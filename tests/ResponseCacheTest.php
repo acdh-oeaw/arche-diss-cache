@@ -317,7 +317,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             $respCache->getResponse([], self::ACL_RES_URL);
             /* @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
-        } catch (ForbiddenException) {
+        } catch (UnauthorizedException) {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
@@ -331,7 +331,7 @@ class ResponseCacheTest extends \PHPUnit\Framework\TestCase {
             $respCache->getResponse([], self::ACL_RES_URL);
             /* @phpstan-ignore method.impossibleType */
             $this->assertTrue(false);
-        } catch (ForbiddenException | UnauthorizedException) {
+        } catch (ForbiddenException) {
             /* @phpstan-ignore method.alreadyNarrowedType */
             $this->assertTrue(true);
         }
