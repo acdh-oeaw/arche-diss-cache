@@ -262,8 +262,8 @@ class ResponseCache implements CallbackContextInterface {
 
         $repoBaseUrl = (string) preg_replace('/[0-9]+$/', '', (string) $res->getUri());
         $clientRoles = $this->getClientRoles($repoBaseUrl);
-        $this->log?->info("Resource roles (" . implode(', ', $roles) . ") client roles (" . implode($clientRoles) . ")");
-        if (count($clientRoles) === 0) {
+        $this->log?->info("Resource roles (" . implode(', ', $roles) . ") client roles (" . implode(', ', $clientRoles) . ")");
+        if (count(array_diff($clientRoles, [$authCfg->publicRole])) === 0) {
             throw new UnauthorizedException();
         }
 
